@@ -1,0 +1,56 @@
+# Lezione 10 – Setup CloudTrail e AWS Config
+# Esegui questi comandi per abilitare audit completo dell'account AWS
+
+REGION="eu-west-1"
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+TRAIL_BUCKET="cloudtrail-logs-gestionale-${ACCOUNT_ID}"
+
+# 1. Creare bucket S3 per i log di CloudTrail
+aws s3 mb "s3://${TRAIL_BUCKET}" --region "$REGION"
+
+# 2. Applicare bucket policy per CloudTrail
+aws s3api put-bucket-policy --bucket "$TRAIL_BUCKET" --policy '{
+  "Version":"2012-10-17",
+  "Statement":[{
+    "Sid":"AWSCloudTrailAclCheck",
+    "Effect":"Allow",
+    "Principal":{"Service":"cloudtrail.amazonaws.com"},
+    "Action":"s3:GetBucketAcl",
+    "Resource":"arn:aws:s3:::'"$TRAIL_BUCKET"'"
+  },{
+    "Sid":"AWSCloudTrailWrite",
+    "Effect":"Allow",
+    "Principal":{"Service":"cloudtrail.amazonaws.com"},
+    "Action":"s3:PutObject",
+    "Resource":"arn:aws:s3:::'"$TRAIL_BUCKET"'/AWSLogs/'"$ACCOUNT_ID"'/*",
+    "Condition":{"StringEquals":{"s3:x-amz-acl":"bucket-owner-full-control"}}
+  }]
+}'
+
+# 3. Creare il trail multi-region
+aws cloudtrail create-trail \
+  --name gestionale-audit-trail \
+  --s3-bucket-name "$TRAIL_BUCKET" \
+  --is-multi-region-trail \
+  --enable-log-file-validation \
+  --region "$REGION"
+
+# 4. Avviare il logging
+aws cloudtrail start-logging \
+  --name gestionale-audit-trail \
+  --region "$REGION"
+
+# 5. Abilitare AWS Config per conformità continua
+aws configservice put-configuration-recorder \
+  --configuration-recorder name=default,roleARN=arn:aws:iam::${ACCOUNT_ID}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig
+
+# 6. Config Rule: rilevare S3 bucket pubblici
+aws configservice put-config-rule --config-rule '{
+  "ConfigRuleName": "s3-bucket-public-read-prohibited",
+  "Source": {
+    "Owner": "AWS",
+    "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+  }
+}'
+
+echo "✅ CloudTrail e AWS Config attivi. Log disponibili in: s3://${TRAIL_BUCKET}"
