@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gestionale-app-deployment
+  labels:
+    app: gestionale
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gestionale
+  template:
+    metadata:
+      labels:
+        app: gestionale
+    spec:
+      containers:
+      - name: gestionale-container
+        # IMPORTANTE: Gli studenti dovranno sostituire <ACCOUNT_ID> con il loro
+        image: <ACCOUNT_ID>.dkr.ecr.eu-west-1.amazonaws.com/gestionale-app:1.0
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ENVIRONMENT
+          value: "AWS-EKS"
+        # SOSTENIBILITÀ: Limiti rigidi per evitare sprechi di risorse cloud
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gestionale-app-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: gestionale
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
