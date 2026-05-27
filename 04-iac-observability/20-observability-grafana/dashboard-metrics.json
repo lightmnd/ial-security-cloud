@@ -1,0 +1,230 @@
+{
+  "dashboard": {
+    "title": "Gestionale - AWS Metrics Overview",
+    "tags": ["gestionale", "aws", "cloudwatch"],
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Lambda Invocations",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "namespace": "AWS/Lambda",
+            "metricName": "Invocations",
+            "statistics": ["Sum"],
+            "dimensions": {
+              "FunctionName": "*"
+            }
+          }
+        ],
+        "datasource": "CloudWatch"
+      },
+      {
+        "id": 2,
+        "title": "Lambda Errors",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "namespace": "AWS/Lambda",
+            "metricName": "Errors",
+            "statistics": ["Sum"],
+            "dimensions": {
+              "FunctionName": "*"
+            }
+          }
+        ],
+        "datasource": "CloudWatch"
+      },
+      {
+        "id": 3,
+        "title": "Lambda Duration (avg)",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "namespace": "AWS/Lambda",
+            "metricName": "Duration",
+            "statistics": ["Average"],
+            "dimensions": {
+              "FunctionName": "*"
+            }
+          }
+        ],
+        "datasource": "CloudWatch",
+        "yaxes": [
+          {
+            "format": "ms"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "RDS CPU Utilization",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "namespace": "AWS/RDS",
+            "metricName": "CPUUtilization",
+            "statistics": ["Average"],
+            "dimensions": {
+              "DBInstanceIdentifier": "gestionale-db"
+            }
+          }
+        ],
+        "datasource": "CloudWatch",
+        "yaxes": [
+          {
+            "format": "percent",
+            "max": 100
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "ALB Target Response Time",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 16,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "namespace": "AWS/ApplicationELB",
+            "metricName": "TargetResponseTime",
+            "statistics": ["Average"],
+            "dimensions": {
+              "LoadBalancer": "*"
+            }
+          }
+        ],
+        "datasource": "CloudWatch",
+        "yaxes": [
+          {
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "ALB Request Count",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 16,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "namespace": "AWS/ApplicationELB",
+            "metricName": "RequestCount",
+            "statistics": ["Sum"],
+            "dimensions": {
+              "LoadBalancer": "*"
+            }
+          }
+        ],
+        "datasource": "CloudWatch"
+      },
+      {
+        "id": 7,
+        "title": "ECS CPU Utilization",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 24,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "namespace": "AWS/ECS",
+            "metricName": "CPUUtilization",
+            "statistics": ["Average"],
+            "dimensions": {
+              "ServiceName": "*",
+              "ClusterName": "gestionale-cluster"
+            }
+          }
+        ],
+        "datasource": "CloudWatch",
+        "yaxes": [
+          {
+            "format": "percent",
+            "max": 100
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "ECS Memory Utilization",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 24,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "namespace": "AWS/ECS",
+            "metricName": "MemoryUtilization",
+            "statistics": ["Average"],
+            "dimensions": {
+              "ServiceName": "*",
+              "ClusterName": "gestionale-cluster"
+            }
+          }
+        ],
+        "datasource": "CloudWatch",
+        "yaxes": [
+          {
+            "format": "percent",
+            "max": 100
+          }
+        ]
+      }
+    ]
+  }
+}
