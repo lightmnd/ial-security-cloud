@@ -9,7 +9,7 @@
 - Configurare Prometheus per la raccolta di metriche
 - Creare dashboard Grafana per il gestionale
 - Integrare CloudWatch come datasource Grafana
-- Preparare una demo che generi metriche AWS reali e visibili nel dashboard
+- Preparare una demo con una Lambda reale creata via Terraform
 
 ## 📚 Concetti Chiave
 
@@ -32,64 +32,36 @@ Grafana supporta CloudWatch nativamente tramite il plugin ufficiale. Permette di
 
 ### Prerequisiti
 - Docker installato per eseguire Grafana localmente
-- AWS CLI configurata per CloudWatch datasource
-- Credenziali AWS con permessi di lettura su CloudWatch
-- Almeno una risorsa AWS reale che stia generando metriche in CloudWatch
+- AWS CLI configurata
+- Terraform installato
+- Credenziali AWS con permessi per creare IAM Role, Lambda e leggere CloudWatch
+- Regione AWS disponibile per la demo: `eu-west-1`
 
-### Risorsa demo consigliata
-Per rendere la demo realizzabile al 100%, conviene usare una **Lambda di test** perché è la risorsa più veloce da creare, invocare e osservare in Grafana.
+### File della demo
+Questa cartella contiene i file Terraform per creare una Lambda reale di test:
+- `main.tf`
+- `variables.tf`
+- `lambda_demo.py`
+- `dashboard-metrics.json`
 
-La Lambda genera subito metriche native in CloudWatch come:
-- `Invocations`
-- `Errors`
-- `Duration`
+La Lambda creata si chiama di default `grafana-demo-metrics` ed è la funzione usata dai pannelli Lambda del dashboard.
 
-Questo permette di validare almeno tre pannelli del dashboard senza dover predisporre un intero stack ECS + ALB + RDS.
-
-### Step 0: Creare una risorsa AWS che generi metriche
-
-Crea una funzione Lambda minimale in `eu-west-1`:
+### Step 1: Creare la Lambda demo con Terraform
 
 ```bash
-cat > lambda-demo.py <<'EOF'
-def lambda_handler(event, context):
-    return {
-        "statusCode": 200,
-        "body": "ok"
-    }
-EOF
-
-zip lambda-demo.zip lambda-demo.py
-
-aws iam create-role \
-  --role-name grafana-lambda-demo-role \
-  --assume-role-policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": {"Service": "lambda.amazonaws.com"},
-      "Action": "sts:AssumeRole"
-    }]
-  }'
-
-aws iam attach-role-policy \
-  --role-name grafana-lambda-demo-role \
-  --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
-aws lambda create-function \
-  --function-name grafana-demo-metrics \
-  --runtime python3.12 \
-  --handler lambda-demo.lambda_handler \
-  --zip-file fileb://lambda-demo.zip \
-  --role arn:aws:iam::<ACCOUNT_ID>:role/grafana-lambda-demo-role \
-  --region eu-west-1
+cd 04-iac-observability/20-observability-grafana
+terraform init
+terraform apply
 ```
 
-> Sostituisci `<ACCOUNT_ID>` con il tuo AWS Account ID. Dopo la creazione, attendi circa 1-2 minuti prima delle prime invocazioni.
+Quando Terraform termina, crea:
+- un ruolo IAM per l'esecuzione della Lambda
+- una Lambda Python di test
+- gli output con nome funzione, ARN e account AWS
 
-### Step 1: Generare metriche reali
+### Step 2: Generare metriche reali in CloudWatch
 
-Invoca la Lambda più volte per popolare CloudWatch:
+Invoca la Lambda più volte per popolare i pannelli Grafana:
 
 ```bash
 for i in {1..20}; do
@@ -105,9 +77,12 @@ done
 echo "Metriche Lambda inviate a CloudWatch"
 ```
 
-Se vuoi generare anche errori visibili nel pannello `Lambda Errors`, modifica temporaneamente la funzione per restituire un'eccezione oppure crea una seconda versione volutamente errata.
+Questo popolerà almeno queste metriche native CloudWatch:
+- `Invocations`
+- `Duration`
+- `Errors` (solo se la funzione va in errore)
 
-### Step 2: Avviare Grafana localmente
+### Step 3: Avviare Grafana localmente
 
 ```bash
 docker run -d \
@@ -120,7 +95,7 @@ echo "Grafana disponibile su http://localhost:3000"
 echo "Login: admin / admin123"
 ```
 
-### Step 3: Configurare CloudWatch Datasource
+### Step 4: Configurare CloudWatch Datasource
 
 ```
 1. Configuration → Data Sources → Add data source
@@ -130,13 +105,15 @@ echo "Login: admin / admin123"
 5. Save & Test
 ```
 
-### Step 4: Esaminare il dashboard JSON
+> Il datasource CloudWatch leggerà le metriche direttamente dal tuo account AWS. La Lambda `grafana-demo-metrics` appena creata sarà quindi visibile come sorgente reale delle metriche Lambda.
+
+### Step 5: Esaminare il dashboard JSON
 
 ```bash
-cat 04-iac-observability/20-observability-grafana/dashboard-metrics.json
+cat dashboard-metrics.json
 ```
 
-### Step 5: Importare il dashboard
+### Step 6: Importare il dashboard
 
 ```
 1. Apri http://localhost:3000
@@ -146,49 +123,40 @@ cat 04-iac-observability/20-observability-grafana/dashboard-metrics.json
 5. Associa il datasource CloudWatch configurato nello step precedente
 ```
 
-### Step 6: Verificare quali pannelli funzionano subito
+### Step 7: Verificare i pannelli
 
-Con la sola Lambda demo saranno popolati subito questi pannelli:
+Con questa demo saranno popolati subito questi pannelli:
 - Lambda Invocations
-- Lambda Errors (solo se generi errori)
 - Lambda Duration (avg)
+- Lambda Errors (solo se generi errori)
 
-I pannelli RDS, ALB ed ECS richiedono invece risorse AWS reali con questi identificativi o equivalenti:
+I pannelli RDS, ALB ed ECS restano nel dashboard perché fanno parte della struttura originale della lezione, ma richiedono risorse AWS reali aggiuntive:
 - RDS con `DBInstanceIdentifier=gestionale-db`
 - ECS con `ClusterName=gestionale-cluster`
-- ALB esistente visibile in `AWS/ApplicationELB`
+- un Application Load Balancer attivo
 
-Se queste risorse non esistono ancora, è normale che i relativi grafici restino vuoti.
+Quindi la demo è davvero eseguibile end-to-end già con la sola Lambda, senza stravolgere il materiale didattico.
 
-### Variante minima per una demo davvero completa
-Se vuoi una demo coerente senza stravolgere il materiale, hai due possibilità:
-
-1. **Versione minima e immediata**: usi solo la Lambda demo e mostri i 3 pannelli Lambda.
-2. **Versione estesa**: aggiorni in seguito anche il JSON del dashboard per filtrare solo metriche realmente presenti nel tuo account oppure aggiungi un piccolo stack Terraform con Lambda + ALB + RDS/ECS demo.
-
-Per questa lezione, la prima opzione è la più semplice, economica e ripetibile.
-
-### 🧹 Cleanup
+### Step 8: Cleanup
 
 ```bash
-aws lambda delete-function \
-  --function-name grafana-demo-metrics \
-  --region eu-west-1
+terraform destroy
 
 docker stop gestionale-grafana && docker rm gestionale-grafana
-rm -f lambda-demo.py lambda-demo.zip /tmp/lambda-output.json
+rm -f /tmp/lambda-output.json
 ```
 
 ## ✅ Checkpoint
 - [ ] Comprendo metrics/logs/traces
-- [ ] Ho creato almeno una risorsa AWS che genera metriche
+- [ ] Ho creato la Lambda demo con Terraform
 - [ ] Ho generato metriche reali in CloudWatch
 - [ ] Grafana avviato localmente
 - [ ] CloudWatch datasource configurato
 - [ ] Dashboard importato
-- [ ] Vedo almeno i pannelli Lambda valorizzati
+- [ ] Vedo i pannelli Lambda valorizzati
 
 ## 📖 Approfondimenti
 - [Grafana Documentation](https://grafana.com/docs/)
 - [Prometheus Documentation](https://prometheus.io/docs/)
 - [AWS CloudWatch](https://docs.aws.amazon.com/cloudwatch/)
+- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
