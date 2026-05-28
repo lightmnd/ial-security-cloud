@@ -75,12 +75,20 @@ aws wellarchitected create-workload \
   --environment "PRODUCTION" \
   --aws-regions "eu-west-1" \
   --industry-type "Education" \
-  --industry "EducationAndResearch" \
+  --industry "Education_Other" \     
   --lenses "wellarchitected" \
-  --region eu-west-1
+  --region eu-west-1 \
+  --review-owner "<your-name>" # your name here
 
 # Salva il workload-id dall'output, es:
 # "WorkloadId": "abc123def456"
+
+# eg:
+# {
+#     "WorkloadId": "928d94c1f2d3778ed90757743009e170",
+#     "WorkloadArn": "arn:aws:wellarchitected:eu-west-1:890465783209:workload/928d94c1f2d3778ed90757743009e170"
+# }
+
 ```
 > 💡 **Cosa sta succedendo:** Stai creando un "progetto" nel WAT che rappresenta la tua applicazione. Il `--lenses` specifica quale set di domande usare — "wellarchitected" è il framework standard.
 
