@@ -1,0 +1,44 @@
+# ── Terraform ────────────────────────────────────────────────────────────────
+# Provider cache – rigenerato da `terraform init`
+**/.terraform/
+
+# State files – possono contenere dati sensibili (ARN, password, chiavi)
+**/terraform.tfstate
+**/terraform.tfstate.backup
+
+# Override files (uso locale, non condivisi)
+**/override.tf
+**/override.tf.json
+**/*_override.tf
+**/*_override.tf.json
+
+# Variabili locali con segreti
+**/terraform.tfvars
+**/terraform.tfvars.json
+**/*.auto.tfvars
+**/*.auto.tfvars.json
+
+# Plan files – possono contenere segreti in chiaro
+**/*.tfplan
+
+# ── Artefatti generati ────────────────────────────────────────────────────────
+# ZIP Lambda prodotti da archive_file – rigenerati da Terraform
+**/*.zip
+
+# ── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+
+# ── Editor / IDE ──────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── Output temporanei ─────────────────────────────────────────────────────────
+/tmp/

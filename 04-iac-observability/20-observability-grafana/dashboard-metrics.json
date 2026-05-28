@@ -1,230 +1,282 @@
 {
-  "dashboard": {
-    "title": "Gestionale - AWS Metrics Overview",
-    "tags": ["gestionale", "aws", "cloudwatch"],
-    "timezone": "browser",
-    "editable": true,
-    "graphTooltip": 1,
-    "time": {
-      "from": "now-1h",
-      "to": "now"
+  "__inputs": [
+    {
+      "name": "DS_CLOUDWATCH",
+      "label": "CloudWatch",
+      "description": "Seleziona il datasource CloudWatch configurato",
+      "type": "datasource",
+      "pluginId": "cloudwatch",
+      "pluginName": "CloudWatch"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "9.0.0"
     },
-    "refresh": "30s",
-    "panels": [
-      {
-        "id": 1,
-        "title": "Lambda Invocations",
-        "type": "graph",
-        "gridPos": {
-          "x": 0,
-          "y": 0,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "namespace": "AWS/Lambda",
-            "metricName": "Invocations",
-            "statistics": ["Sum"],
-            "dimensions": {
-              "FunctionName": "*"
-            }
-          }
-        ],
-        "datasource": "CloudWatch"
+    {
+      "type": "datasource",
+      "id": "cloudwatch",
+      "name": "CloudWatch",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
+  "id": null,
+  "uid": "gestionale-aws-metrics",
+  "title": "Gestionale - AWS Metrics Overview",
+  "tags": ["gestionale", "aws", "cloudwatch"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 38,
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Lambda Invocations",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "linear", "showPoints": "auto" }
+        }
       },
-      {
-        "id": 2,
-        "title": "Lambda Errors",
-        "type": "graph",
-        "gridPos": {
-          "x": 12,
-          "y": 0,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "namespace": "AWS/Lambda",
-            "metricName": "Errors",
-            "statistics": ["Sum"],
-            "dimensions": {
-              "FunctionName": "*"
-            }
-          }
-        ],
-        "datasource": "CloudWatch"
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/Lambda",
+          "metricName": "Invocations",
+          "statistic": "Sum",
+          "dimensions": { "FunctionName": ["grafana-demo-metrics"] },
+          "period": "",
+          "region": "default"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Lambda Errors",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "custom": { "lineInterpolation": "linear", "showPoints": "auto" }
+        }
       },
-      {
-        "id": 3,
-        "title": "Lambda Duration (avg)",
-        "type": "graph",
-        "gridPos": {
-          "x": 0,
-          "y": 8,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "namespace": "AWS/Lambda",
-            "metricName": "Duration",
-            "statistics": ["Average"],
-            "dimensions": {
-              "FunctionName": "*"
-            }
-          }
-        ],
-        "datasource": "CloudWatch",
-        "yaxes": [
-          {
-            "format": "ms"
-          }
-        ]
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/Lambda",
+          "metricName": "Errors",
+          "statistic": "Sum",
+          "dimensions": { "FunctionName": ["grafana-demo-metrics"] },
+          "period": "",
+          "region": "default"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Lambda Duration (avg ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "linear", "showPoints": "auto" }
+        }
       },
-      {
-        "id": 4,
-        "title": "RDS CPU Utilization",
-        "type": "graph",
-        "gridPos": {
-          "x": 12,
-          "y": 8,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "namespace": "AWS/RDS",
-            "metricName": "CPUUtilization",
-            "statistics": ["Average"],
-            "dimensions": {
-              "DBInstanceIdentifier": "gestionale-db"
-            }
-          }
-        ],
-        "datasource": "CloudWatch",
-        "yaxes": [
-          {
-            "format": "percent",
-            "max": 100
-          }
-        ]
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/Lambda",
+          "metricName": "Duration",
+          "statistic": "Average",
+          "dimensions": { "FunctionName": ["grafana-demo-metrics"] },
+          "period": "",
+          "region": "default"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "RDS CPU Utilization",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "linear", "showPoints": "auto" }
+        }
       },
-      {
-        "id": 5,
-        "title": "ALB Target Response Time",
-        "type": "graph",
-        "gridPos": {
-          "x": 0,
-          "y": 16,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "namespace": "AWS/ApplicationELB",
-            "metricName": "TargetResponseTime",
-            "statistics": ["Average"],
-            "dimensions": {
-              "LoadBalancer": "*"
-            }
-          }
-        ],
-        "datasource": "CloudWatch",
-        "yaxes": [
-          {
-            "format": "s"
-          }
-        ]
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "CPUUtilization",
+          "statistic": "Average",
+          "dimensions": { "DBInstanceIdentifier": ["gestionale-db"] },
+          "period": "",
+          "region": "default"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "ALB Target Response Time",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "linear", "showPoints": "auto" }
+        }
       },
-      {
-        "id": 6,
-        "title": "ALB Request Count",
-        "type": "graph",
-        "gridPos": {
-          "x": 12,
-          "y": 16,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "namespace": "AWS/ApplicationELB",
-            "metricName": "RequestCount",
-            "statistics": ["Sum"],
-            "dimensions": {
-              "LoadBalancer": "*"
-            }
-          }
-        ],
-        "datasource": "CloudWatch"
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "Average",
+          "dimensions": {},
+          "period": "",
+          "region": "default"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "ALB Request Count",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "linear", "showPoints": "auto" }
+        }
       },
-      {
-        "id": 7,
-        "title": "ECS CPU Utilization",
-        "type": "graph",
-        "gridPos": {
-          "x": 0,
-          "y": 24,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "namespace": "AWS/ECS",
-            "metricName": "CPUUtilization",
-            "statistics": ["Average"],
-            "dimensions": {
-              "ServiceName": "*",
-              "ClusterName": "gestionale-cluster"
-            }
-          }
-        ],
-        "datasource": "CloudWatch",
-        "yaxes": [
-          {
-            "format": "percent",
-            "max": 100
-          }
-        ]
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "RequestCount",
+          "statistic": "Sum",
+          "dimensions": {},
+          "period": "",
+          "region": "default"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "ECS CPU Utilization",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "linear", "showPoints": "auto" }
+        }
       },
-      {
-        "id": 8,
-        "title": "ECS Memory Utilization",
-        "type": "graph",
-        "gridPos": {
-          "x": 12,
-          "y": 24,
-          "w": 12,
-          "h": 8
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "namespace": "AWS/ECS",
-            "metricName": "MemoryUtilization",
-            "statistics": ["Average"],
-            "dimensions": {
-              "ServiceName": "*",
-              "ClusterName": "gestionale-cluster"
-            }
-          }
-        ],
-        "datasource": "CloudWatch",
-        "yaxes": [
-          {
-            "format": "percent",
-            "max": 100
-          }
-        ]
-      }
-    ]
-  }
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ECS",
+          "metricName": "CPUUtilization",
+          "statistic": "Average",
+          "dimensions": { "ClusterName": ["gestionale-cluster"] },
+          "period": "",
+          "region": "default"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "ECS Memory Utilization",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "linear", "showPoints": "auto" }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ECS",
+          "metricName": "MemoryUtilization",
+          "statistic": "Average",
+          "dimensions": { "ClusterName": ["gestionale-cluster"] },
+          "period": "",
+          "region": "default"
+        }
+      ]
+    }
+  ]
 }
