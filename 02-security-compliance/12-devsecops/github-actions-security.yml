@@ -1,0 +1,163 @@
+# ---------------------------------------------------------------------------
+# DevSecOps Pipeline – Gestionale IAL (Lezione 12)
+#
+# Jobs:
+#   1. sast-snyk      → SAST + SCA con Snyk (blocca su HIGH/CRITICAL)
+#   2. container-scan → scansione immagine Docker con Trivy
+#   3. secrets-scan   → ricerca segreti hardcoded con Trivy fs
+#   4. build-push     → build e push su ECR (solo su push a main,
+#                       dopo che tutti i gate di sicurezza passano)
+#
+# Secrets necessari nel repository GitHub:
+#   SNYK_TOKEN           → token Snyk (https://app.snyk.io/account)
+#   AWS_ACCESS_KEY_ID    → credenziale AWS con permessi ECR
+#   AWS_SECRET_ACCESS_KEY
+# ---------------------------------------------------------------------------
+
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  APP_NAME: gestionale-app
+  APP_DIR: 02-security-compliance/12-devsecops/app
+  AWS_REGION: eu-west-1
+
+jobs:
+  # ── 1. SAST & Dependency Scan (Snyk) ──────────────────────────────────────
+  sast-snyk:
+    name: SAST & Dependency Scan (Snyk)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r ${{ env.APP_DIR }}/requirements.txt
+
+      - name: Snyk – SCA (dipendenze)
+        uses: snyk/actions/python-3.10@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: >
+            --severity-threshold=high
+            --file=${{ env.APP_DIR }}/requirements.txt
+
+      - name: Snyk – SAST (codice sorgente)
+        uses: snyk/actions/python-3.10@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: code test
+          args: ${{ env.APP_DIR }}
+
+  # ── 2. Container Scan (Trivy) ─────────────────────────────────────────────
+  container-scan:
+    name: Container Scan (Trivy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ env.APP_NAME }}:${{ github.sha }} \
+            ${{ env.APP_DIR }}
+
+      - name: Trivy – scansione immagine (CRITICAL/HIGH bloccanti)
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: "${{ env.APP_NAME }}:${{ github.sha }}"
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Trivy – upload SARIF su GitHub Security tab
+        uses: aquasecurity/trivy-action@0.20.0
+        if: always()
+        with:
+          image-ref: "${{ env.APP_NAME }}:${{ github.sha }}"
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+  # ── 3. Secrets & IaC Scan (Trivy fs) ─────────────────────────────────────
+  secrets-scan:
+    name: Secrets & IaC Scan (Trivy fs)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy – secrets e misconfiguration (non bloccante in PR)
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret,config
+          format: table
+          exit-code: "0"
+
+  # ── 4. Build & Push su ECR (solo main, dopo i gate di sicurezza) ──────────
+  build-push:
+    name: Build & Push to ECR
+    runs-on: ubuntu-latest
+    needs: [sast-snyk, container-scan, secrets-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag e push su ECR
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build \
+            -t $REGISTRY/${{ env.APP_NAME }}:${{ github.sha }} \
+            -t $REGISTRY/${{ env.APP_NAME }}:latest \
+            ${{ env.APP_DIR }}
+
+          docker push $REGISTRY/${{ env.APP_NAME }}:${{ github.sha }}
+          docker push $REGISTRY/${{ env.APP_NAME }}:latest
+
+          echo "Image pushed: $REGISTRY/${{ env.APP_NAME }}:${{ github.sha }}"
+
+      - name: Summary
+        run: |
+          echo "### ✅ Deploy completato" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tutti i gate di sicurezza superati**" >> $GITHUB_STEP_SUMMARY

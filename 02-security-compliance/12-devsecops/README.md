@@ -68,12 +68,57 @@ Developer push → GitHub
 
 ## 🛠️ Hands-on: Pipeline DevSecOps con GitHub Actions
 
+### File della demo
+Questa cartella contiene tutti i file necessari all'hands-on:
+```
+12-devsecops/
+├── app/
+│   ├── app.py            ← Flask mini-gestionale (3 endpoint)
+│   ├── requirements.txt  ← dipendenze Python
+│   └── Dockerfile        ← multi-stage build, utente non-root
+└── github-actions-security.yml  ← pipeline CI/CD con 4 job
+```
+
 ### Prerequisiti
-- Repository GitHub con il codice del gestionale
-- Account Snyk (gratuito: https://snyk.io)
-- Secrets configurati nel repository: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `SNYK_TOKEN`
+- Docker installato localmente
+- Account GitHub con un fork/repository del progetto
+- Account Snyk gratuito: https://app.snyk.io
+- AWS CLI configurata (solo per il job ECR, opzionale per la demo locale)
+- Secrets configurati nel repository GitHub:
+  - `SNYK_TOKEN` (obbligatorio per i job Snyk)
+  - `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` (solo per il push su ECR)
+
+> 💡 **Repository di riferimento:** Se non hai ancora un repo GitHub, crea un fork di questo progetto o crea un nuovo repo e copia la cartella `12-devsecops/` al suo interno. Il workflow si aspetta che i file siano nel percorso `02-security-compliance/12-devsecops/`.
+
+### Step 0: Avviare l'app demo in locale
+
+```bash
+cd 02-security-compliance/12-devsecops/app
+
+# Build dell'immagine
+docker build -t gestionale-app:1.0 .
+
+# Avvia il container
+docker run -d -p 8080:8080 --name gestionale-demo gestionale-app:1.0
+
+# Testa gli endpoint
+curl http://localhost:8080/api/health
+curl http://localhost:8080/api/studenti
+
+# Stop
+docker stop gestionale-demo && docker rm gestionale-demo
+```
 
 ### Step 1: Esaminare il Workflow GitHub Actions
+
+Il file definisce **4 job** che vengono eseguiti in parallelo (i primi 3) e poi in sequenza (il 4°):
+
+| Job | Tool | Gate |
+|---|---|---|
+| `sast-snyk` | Snyk Code + Snyk Open Source | Blocca su HIGH/CRITICAL |
+| `container-scan` | Trivy image | Blocca su CRITICAL/HIGH CVE |
+| `secrets-scan` | Trivy fs | Non bloccante (solo report) |
+| `build-push` | Docker + ECR | Solo su push a `main`, dopo tutti i gate |
 
 ```bash
 cat 02-security-compliance/12-devsecops/github-actions-security.yml
@@ -95,9 +140,15 @@ gh secret set AWS_SECRET_ACCESS_KEY --body "il-tuo-secret"
 ```bash
 # Installa Trivy
 brew install aquasecurity/trivy/trivy  # macOS
-# oppure: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
+# oppure:
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-# Scansiona l'immagine del gestionale
+# Build dell'immagine (se non già fatto nello Step 0)
+cd 02-security-compliance/12-devsecops/app
+docker build -t gestionale-app:1.0 .
+cd -
+
+# Scansiona l'immagine
 trivy image gestionale-app:1.0
 
 # Scansiona solo per CRITICAL e HIGH
@@ -107,7 +158,7 @@ trivy image --severity CRITICAL,HIGH gestionale-app:1.0
 trivy image --format json --output trivy-results.json gestionale-app:1.0
 
 # Scansiona il filesystem (IaC, secrets, misconfig)
-trivy fs --scanners vuln,secret,config 01-strategy-agnostic/
+trivy fs --scanners vuln,secret,config 02-security-compliance/12-devsecops/
 ```
 > 💡 **Cosa sta succedendo:** Trivy scarica i database CVE aggiornati e confronta i pacchetti nell'immagine con le vulnerabilità note.
 
@@ -117,38 +168,59 @@ trivy fs --scanners vuln,secret,config 01-strategy-agnostic/
 # Installa Snyk CLI
 npm install -g snyk
 
-# Autenticati
+# Autenticati (apre il browser su https://app.snyk.io)
 snyk auth
 
-# Scan delle dipendenze Python
-cd 01-strategy-agnostic/03-docker-agnostic/
+# Scan delle dipendenze Python (SCA)
+cd 02-security-compliance/12-devsecops/app
 snyk test --file=requirements.txt
 
-# Scan SAST del codice
+# Scan SAST del codice sorgente
 snyk code test
 
-# Monitora il progetto
+# Monitora il progetto nel dashboard Snyk
 snyk monitor
+
+cd -
 ```
 
 ### Step 5: Analizzare i Risultati e Correggere
 
 ```bash
-# Esempio: Snyk rileva una vulnerabilità in requests < 2.31.0
-# Fix: aggiorna requirements.txt
-sed -i 's/requests==2.28.0/requests==2.31.0/' requirements.txt
+# Esempio: Snyk o Trivy rilevano una vulnerabilità in una dipendenza
+# Verifica la versione corrente
+cat 02-security-compliance/12-devsecops/app/requirements.txt
 
-# Rebuild e re-scan
-docker build -t gestionale-app:1.1 .
+# Aggiorna la versione vulnerabile (esempio)
+sed -i '' 's/requests==2.31.0/requests==2.32.3/' \
+  02-security-compliance/12-devsecops/app/requirements.txt
+
+# Rebuild con tag aggiornato
+docker build -t gestionale-app:1.1 02-security-compliance/12-devsecops/app/
+
+# Re-scan per verificare che la vulnerabilità sia risolta
 trivy image --severity CRITICAL,HIGH gestionale-app:1.1
 ```
+
+> 💡 **Flusso in CI/CD:** ogni `git push` su un branch riattiva la pipeline. Se il gate Trivy o Snyk fallisce, il job `build-push` non viene eseguito e l'immagine non raggiunge ECR.
 
 ### 🧹 Cleanup (Sostenibilità)
 
 ```bash
+# Rimuovi immagini Docker locali
+docker rmi gestionale-app:1.0 gestionale-app:1.1 2>/dev/null || true
+
+# Rimuovi file temporanei
 rm -f trivy-results.json
+
 # Deregistra il progetto da Snyk se non più necessario
 # (dal dashboard Snyk: Projects → Delete)
+
+# Se hai pushato su ECR, elimina l'immagine remota
+# aws ecr batch-delete-image \
+#   --repository-name gestionale-app \
+#   --image-ids imageTag=latest \
+#   --region eu-west-1
 ```
 
 ## ✅ Checkpoint
