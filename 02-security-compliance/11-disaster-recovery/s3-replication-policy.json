@@ -1,0 +1,41 @@
+{
+  "Role": "ROLE_ARN_PLACEHOLDER",
+  "Rules": [
+    {
+      "ID": "replicate-documenti",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "documenti/"
+      },
+      "Destination": {
+        "Bucket": "arn:aws:s3:::DEST_BUCKET_PLACEHOLDER",
+        "StorageClass": "STANDARD_IA",
+        "EncryptionConfiguration": {
+          "ReplicaKmsKeyID": "aws/s3"
+        }
+      },
+      "SourceSelectionCriteria": {
+        "SseKmsEncryptedObjects": {
+          "Status": "Enabled"
+        }
+      },
+      "DeleteMarkerReplication": {
+        "Status": "Enabled"
+      }
+    },
+    {
+      "ID": "replicate-backup",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "backup/"
+      },
+      "Destination": {
+        "Bucket": "arn:aws:s3:::DEST_BUCKET_PLACEHOLDER",
+        "StorageClass": "GLACIER"
+      },
+      "DeleteMarkerReplication": {
+        "Status": "Disabled"
+      }
+    }
+  ]
+}
