@@ -49,6 +49,24 @@ EKS è il Kubernetes gestito di AWS. AWS gestisce il control plane (alta disponi
 - `eksctl` installato (`eksctl version`)
 - AWS CLI configurata con permessi EKS
 
+```bash
+# macOS
+brew install kubectl
+brew tap weaveworks/tap && brew install weaveworks/tap/eksctl
+
+# Linux
+curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+curl --silent --location \
+  "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" \
+  | tar xz -C /tmp && sudo mv /tmp/eksctl /usr/local/bin/
+
+# Verifica
+kubectl version --client
+exksctl version
+```
+
 ### Step 1: Creare il cluster EKS (⚠️ richiede ~15 minuti)
 
 ```bash
@@ -72,6 +90,21 @@ aws eks update-kubeconfig \
 kubectl get nodes
 ```
 > 💡 **Alternativa:** Per evitare costi EKS, usa `minikube start` o `kind create cluster` per un cluster locale.
+
+#### Cosa fa ogni flag di `eksctl create cluster`
+
+| Flag | Significato |
+|---|---|
+| `--name gestionale-cluster` | Nome del cluster |
+| `--region eu-west-1` | Regione AWS – Irlanda (dati in UE per GDPR) |
+| `--nodegroup-name workers` | Nome del gruppo di nodi (le VM che eseguono i container) |
+| `--node-type t3.medium` | Tipo di istanza EC2: 2 vCPU, 4 GiB RAM — adatta per test |
+| `--nodes 2` | Numero iniziale di nodi al momento della creazione |
+| `--nodes-min 1` | Soglia minima autoscaling: non scende mai sotto 1 nodo |
+| `--nodes-max 4` | Soglia massima autoscaling: crea fino a 4 nodi se il carico cresce |
+| `--managed` | Abilita i **Managed Node Groups**: AWS gestisce OS, patch e aggiornamenti K8s |
+
+`eksctl` configura automaticamente anche VPC, sottoreti, Security Group e ruoli IAM.
 
 ### Step 2: Esaminare il Deployment esistente
 
@@ -120,67 +153,140 @@ spec:
           periodSeconds: 10
 ```
 
-### Step 3: Deploy dell'applicazione
+### Step 2b: Creare il repository ECR e fare il push dell'immagine
+
+Il `deployment.yaml` referenzia un'immagine ECR (`<ACCOUNT_ID>.dkr.ecr.eu-west-1.amazonaws.com/gestionale-app:1.0`). Prima del deploy occorre creare il repository, costruire l'immagine dal Dockerfile della Lezione 3 e fare il push. Tagghiamo subito anche la versione `1.1` che servirà per il Rolling Update.
 
 ```bash
-# Applica il deployment
-kubectl apply -f 01-strategy-agnostic/04-eks-deploy/deployment.yaml
+# Variabili
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION=eu-west-1
+ECR_REPO=gestionale-app
+ECR_URI=$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$ECR_REPO
+
+# 1. Crea il repository ECR (una tantum; --image-scanning-configuration abilita scan automatico al push)
+aws ecr create-repository \
+  --repository-name $ECR_REPO \
+  --region $REGION \
+  --image-scanning-configuration scanOnPush=true
+
+# 2. Autentica Docker su ECR
+aws ecr get-login-password --region $REGION \
+  | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+# 3. Build dell'immagine (usa il Dockerfile della Lezione 3)
+docker build -t $ECR_REPO:1.0 01-strategy-agnostic/03-docker-agnostic/
+
+# 4. Tag e push versione 1.0
+docker tag $ECR_REPO:1.0 $ECR_URI:1.0
+docker push $ECR_URI:1.0
+
+# 5. Tag e push versione 1.1 (simula rilascio nuovo — necessario per lo Step 6)
+docker tag $ECR_REPO:1.0 $ECR_URI:1.1
+docker push $ECR_URI:1.1
+
+echo "Immagini disponibili in ECR: $ECR_URI:1.0 e $ECR_URI:1.1"
+```
+
+> 💡 `scanOnPush=true` fa partire automaticamente una scansione CVE (Trivy-based) ad ogni push — risultati visibili in **ECR → Repository → gestionale-app → Image scanning**.
+
+### Step 3: Deploy dell'applicazione
+
+> ⚠️ **Il file `deployment.yaml` contiene il placeholder `<ACCOUNT_ID>`** che deve essere sostituito con l'ID del tuo account AWS prima di applicarlo. Kubernetes non riesce a risolvere il nome dell'immagine ECR se il placeholder è rimasto letterale (errore `InvalidImageName`).
+
+```bash
+# Sostituisce <ACCOUNT_ID> al volo senza modificare il file
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo "Account ID: $ACCOUNT_ID"
+
+sed "s/<ACCOUNT_ID>/$ACCOUNT_ID/g" \
+  01-strategy-agnostic/04-eks-deploy/deployment.yaml \
+  | kubectl apply -f -
 
 # Monitora lo stato del deployment
-kubectl rollout status deployment/gestionale-app
+kubectl rollout status deployment/gestionale-app-deployment
 
 # Vedi i Pod creati
 kubectl get pods -l app=gestionale
 
-# Dettagli su un Pod
+# Dettagli su un Pod (utile per debug)
 kubectl describe pod $(kubectl get pods -l app=gestionale -o jsonpath='{.items[0].metadata.name}')
 ```
 
+> 💡 Il Pod resta in `Pending` o `ImagePullBackOff` se l'immagine `gestionale-app:1.0` non esiste nel tuo ECR. In quel caso, o crei prima il repository ECR e fai il push dell'immagine, oppure usa l'immagine locale dalla lezione 3:
+> ```bash
+> # Alternativa con immagine pubblica per test rapido
+> kubectl set image deployment/gestionale-app-deployment \
+>   gestionale-container=python:3.12-slim
+> ```
+
 ### Step 4: Scaling Manuale
+
+> `kubectl scale` imposta **manualmente** un numero fisso di repliche. Decidi tu quante istanze avviare. È immediato ma non reagisce al carico in modo autonomo.
 
 ```bash
 # Scala a 4 repliche per gestire un picco di traffico
-kubectl scale deployment gestionale-app --replicas=4
+kubectl scale deployment gestionale-app-deployment --replicas=4
 
 # Verifica
 kubectl get pods -l app=gestionale
 # OUTPUT: 4 pod Running
 
 # Scala di nuovo a 2 (risparmio costi/energia)
-kubectl scale deployment gestionale-app --replicas=2
+kubectl scale deployment gestionale-app-deployment --replicas=2
 ```
 
 ### Step 5: Horizontal Pod Autoscaler (HPA)
 
+> `kubectl autoscale` (HPA) crea un controller che **monitora le metriche in continuo** e aggiusta automaticamente le repliche tra `--min` e `--max`. A differenza di `kubectl scale`, non intervieni tu: è Kubernetes che scala su e giù in base al carico reale.
+>
+> | | `kubectl scale` | HPA (`kubectl autoscale`) |
+> |---|---|---|
+> | Chi decide | Tu, manualmente | Kubernetes, in automatico |
+> | Reagisce al carico | No | Sì (CPU, memoria, metriche custom) |
+> | Persistente | No (va riapplicato) | Sì (risorsa `HorizontalPodAutoscaler`) |
+> | Caso d'uso | Picchi noti, manutenzione | Produzione, traffico variabile |
+
 ```bash
-# Installa metrics-server (necessario per HPA)
+# metrics-server è già installato su EKS managed — se ricevi conflitti
+# ("spec.selector: field is immutable"), elimina e reinstalla:
+kubectl delete deployment metrics-server -n kube-system 2>/dev/null || true
 kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
+# Attendi che metrics-server sia pronto
+kubectl rollout status deployment/metrics-server -n kube-system
+
+# Elimina eventuale HPA esistente prima di ricrearlo
+kubectl delete hpa gestionale-app-deployment 2>/dev/null || true
+
 # Crea HPA: scala da 2 a 10 pod se CPU > 70%
-kubectl autoscale deployment gestionale-app \
-  --cpu-percent=70 \
+# Nota: --cpu-percent è deprecato da K8s 1.23+, usare --cpu=70%
+kubectl autoscale deployment gestionale-app-deployment \
+  --cpu=70% \
   --min=2 \
   --max=10
 
 # Visualizza lo stato HPA
-kubectl get hpa gestionale-app
+kubectl get hpa gestionale-app-deployment
 ```
 
 ### Step 6: Rolling Update
 
 ```bash
 # Aggiorna all'immagine versione 1.1 senza downtime
-kubectl set image deployment/gestionale-app \
-  gestionale=gestionale-app:1.1
+# (ACCOUNT_ID necessario perché l'immagine è su ECR)
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+kubectl set image deployment/gestionale-app-deployment \
+  gestionale-container=$ACCOUNT_ID.dkr.ecr.eu-west-1.amazonaws.com/gestionale-app:1.1
 
 # Monitora il rolling update (pod vecchi vengono sostituiti gradualmente)
-kubectl rollout status deployment/gestionale-app
+kubectl rollout status deployment/gestionale-app-deployment
 
 # Se qualcosa va storto, rollback alla versione precedente
-kubectl rollout undo deployment/gestionale-app
+kubectl rollout undo deployment/gestionale-app-deployment
 
 # Visualizza la storia dei deployment
-kubectl rollout history deployment/gestionale-app
+kubectl rollout history deployment/gestionale-app-deployment
 ```
 
 ### 🧹 Cleanup (Sostenibilità)
@@ -188,17 +294,24 @@ kubectl rollout history deployment/gestionale-app
 ```bash
 # Elimina le risorse Kubernetes
 kubectl delete -f 01-strategy-agnostic/04-eks-deploy/deployment.yaml
-kubectl delete hpa gestionale-app
+kubectl delete hpa gestionale-app-deployment 2>/dev/null || true
+
+# Elimina il repository ECR e tutte le immagini (--force rimuove anche immagini presenti)
+aws ecr delete-repository \
+  --repository-name gestionale-app \
+  --region eu-west-1 \
+  --force
 
 # Elimina il cluster EKS (evita costi)
 eksctl delete cluster --name gestionale-cluster --region eu-west-1
 
-echo "Cluster EKS eliminato - nessun costo ricorrente"
+echo "Cluster EKS ed ECR eliminati - nessun costo ricorrente"
 ```
 
 ## ✅ Checkpoint
 - [ ] Comprendo la differenza tra Pod, Deployment e Service
 - [ ] Cluster EKS creato (o minikube come alternativa)
+- [ ] Repository ECR creato e immagine pushata (`:1.0` e `:1.1`)
 - [ ] Deployment applicato e Pod in Running
 - [ ] Scaling manuale eseguito con `kubectl scale`
 - [ ] HPA configurato
