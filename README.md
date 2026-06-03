@@ -21,28 +21,128 @@ Benvenuti nel corso pratico dedicato alla progettazione di sistemi cloud moderni
 | **12** | 23-24 | Final Lab & Test | Assemblaggio & Valutazione |
 
 ## 🚀 Inizializzazione Ambiente
-Per configurare i tool necessari (AWS CLI, Terraform, Docker, Kubectl), esegui:
+Per configurare i tool necessari (AWS CLI, Terraform, Docker, kubectl), esegui:
+
 ```bash
 chmod +x setup-env.sh
 ./setup-env.sh
+```
 
----
+## 🔧 Installazione Tool Necessari (macOS / Linux / Windows)
+
+Tool richiesti nel corso:
+- AWS CLI
+- Terraform
+- Docker
+- kubectl
+
+### macOS (Homebrew)
+
+```bash
+brew update
+brew install awscli terraform kubectl
+brew install --cask docker
+```
+
+Avvia Docker Desktop almeno una volta e verifica:
+
+```bash
+aws --version
+terraform -version
+docker --version
+kubectl version --client
+```
+
+### Linux (Debian/Ubuntu)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg lsb-release unzip
+
+# AWS CLI v2
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip -q awscliv2.zip
+sudo ./aws/install
+rm -rf aws awscliv2.zip
+
+# Terraform (HashiCorp apt repo)
+curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt-get update
+sudo apt-get install -y terraform
+
+# Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"
+
+# kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+rm kubectl
+```
+
+Verifica:
+
+```bash
+aws --version
+terraform -version
+docker --version
+kubectl version --client
+```
+
+### Windows CMD (winget)
+
+Apri CMD come amministratore:
+
+```bat
+winget install --id Amazon.AWSCLI -e
+winget install --id Hashicorp.Terraform -e
+winget install --id Docker.DockerDesktop -e
+winget install --id Kubernetes.kubectl -e
+```
+
+Verifica da CMD:
+
+```bat
+aws --version
+terraform -version
+docker --version
+kubectl version --client
+```
+
+### Windows Git Bash (alternativa con Chocolatey)
+
+Se usi Git Bash, installa i pacchetti da PowerShell amministratore:
+
+```powershell
+choco install awscli terraform kubernetes-cli docker-desktop -y
+```
+
+Poi verifica da Git Bash:
+
+```bash
+aws --version
+terraform -version
+docker --version
+kubectl version --client
+```
 
 ## ⚙️ setup-env.sh (Versione da copiare)
 
 ```bash
 #!/bin/bash
-echo "🛠️ Inizializzazione Ambiente di Sviluppo per il Corso..."
+echo "Inizializzazione Ambiente di Sviluppo per il Corso..."
 
 # Controllo installazione strumenti
-command -v aws >/dev/null 2>&1 || { echo >&2 "❌ AWS CLI non trovato."; }
-command -v terraform >/dev/null 2>&1 || { echo >&2 "❌ Terraform non trovato."; }
-command -v docker >/dev/null 2>&1 || { echo >&2 "❌ Docker non trovato."; }
-command -v kubectl >/dev/null 2>&1 || { echo >&2 "❌ Kubectl non trovato."; }
+command -v aws >/dev/null 2>&1 || { echo >&2 "AWS CLI non trovato."; }
+command -v terraform >/dev/null 2>&1 || { echo >&2 "Terraform non trovato."; }
+command -v docker >/dev/null 2>&1 || { echo >&2 "Docker non trovato."; }
+command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl non trovato."; }
 
 # Creazione cartelle di lavoro locali
 mkdir -p workspace/terraform workspace/docker workspace/k8s
 
+<<<<<<< HEAD
 echo "✅ Setup completato. Ora puoi procedere con il Modulo 1."
 
 #---------------------------#
@@ -83,3 +183,7 @@ echo "📁 Creazione directory del workspace..."
 mkdir -p workspace/terraform workspace/docker workspace/k8s
 
 echo "🎉 Setup completato! Ora puoi procedere con il Modulo 1."
+=======
+echo "Setup completato. Ora puoi procedere con il Modulo 1."
+```
+>>>>>>> 85f9523 (Refactor code structure for improved readability and maintainability)

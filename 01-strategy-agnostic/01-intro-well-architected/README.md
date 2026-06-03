@@ -69,16 +69,27 @@ aws sts get-caller-identity
 ### Step 2: Creare un Workload nel Well-Architected Tool
 
 ```bash
-aws wellarchitected create-workload \
+# aws wellarchitected create-workload \
+#   --workload-name "Sistema-Gestionale-IAL" \
+#   --description "Sistema gestionale per scuola di formazione professionale" \
+#   --environment "PRODUCTION" \
+#   --aws-regions "eu-west-1" \
+#   --industry-type "Education" \
+#   --industry "Education_Other" \     
+#   --lenses "wellarchitected" \
+#   --region eu-west-1 \
+#   --review-owner "<your-name>" # your name here
+
+  aws wellarchitected create-workload \
   --workload-name "Sistema-Gestionale-IAL" \
   --description "Sistema gestionale per scuola di formazione professionale" \
   --environment "PRODUCTION" \
   --aws-regions "eu-west-1" \
   --industry-type "Education" \
-  --industry "Education_Other" \     
+  --industry "Higher_Ed_Research" \
   --lenses "wellarchitected" \
   --region eu-west-1 \
-  --review-owner "<your-name>" # your name here
+  --review-owner "Roberto"
 
 # Salva il workload-id dall'output, es:
 # "WorkloadId": "abc123def456"
