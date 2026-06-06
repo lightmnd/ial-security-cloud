@@ -142,7 +142,6 @@ command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl non trovato."; }
 # Creazione cartelle di lavoro locali
 mkdir -p workspace/terraform workspace/docker workspace/k8s
 
-<<<<<<< HEAD
 echo "✅ Setup completato. Ora puoi procedere con il Modulo 1."
 
 #---------------------------#
@@ -183,7 +182,3 @@ echo "📁 Creazione directory del workspace..."
 mkdir -p workspace/terraform workspace/docker workspace/k8s
 
 echo "🎉 Setup completato! Ora puoi procedere con il Modulo 1."
-=======
-echo "Setup completato. Ora puoi procedere con il Modulo 1."
-```
->>>>>>> 85f9523 (Refactor code structure for improved readability and maintainability)

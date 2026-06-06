@@ -41,6 +41,20 @@ Stage 1 (builder): Python 3.11 + pip + dipendenze (~500MB)
 Stage 2 (runtime): Python 3.11-slim (~100MB)
 ```
 
+### Differenza tra Single-Stage e Multi-Stage
+
+| Aspetto | Single-Stage | Multi-Stage |
+|---|---|---|
+| Numero di stage | 1 solo `FROM` | 2 o piu `FROM` |
+| Contenuto immagine finale | Include spesso tool di build + runtime | Include solo cio che serve a runtime |
+| Dimensione immagine | In genere maggiore | In genere minore |
+| Superficie d'attacco | Maggiore (piu pacchetti installati) | Minore (meno componenti) |
+| Velocita deploy/pull | Piu lenta su rete | Piu veloce su rete |
+| Complessita Dockerfile | Piu semplice | Leggermente piu complesso |
+| Quando usarlo | Demo rapide o prototipi | Produzione e ambienti cloud |
+
+In pratica: con single-stage e piu facile partire, ma con multi-stage ottieni immagini piu leggere, piu sicure e piu efficienti da distribuire.
+
 ### Amazon ECR (Elastic Container Registry)
 ECR è il registro privato di AWS per immagini Docker. Integrato con IAM per autenticazione, supporta scansione automatica delle vulnerabilità (ECR Enhanced Scanning con Inspector v2), lifecycle policies per eliminare immagini vecchie.
 
@@ -61,19 +75,25 @@ Il Dockerfile dell'app gestionale già presente usa multi-stage build. Analizzia
 
 ```dockerfile
 # Stage 1: Builder — installa dipendenze
-FROM python:3.11-slim AS builder
+FROM python:3.12-alpine AS builder
 WORKDIR /app
+ENV VENV_PATH=/opt/venv
+RUN python -m venv "$VENV_PATH"
+ENV PATH="$VENV_PATH/bin:$PATH"
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
+COPY app.py .
 
 # Stage 2: Runtime — immagine finale leggera
-FROM python:3.11-slim AS runtime
+FROM python:3.12-alpine AS runtime
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
-# Copia solo i pacchetti installati, non pip, non cache
-COPY --from=builder /root/.local /root/.local
-COPY app.py .
-ENV PATH=/root/.local/bin:$PATH
-EXPOSE 8000
+ENV VENV_PATH=/opt/venv
+ENV PATH="$VENV_PATH/bin:$PATH"
+COPY --from=builder "$VENV_PATH" "$VENV_PATH"
+COPY --from=builder /app/app.py /app/app.py
+USER appuser
+EXPOSE 8080
 CMD ["python", "app.py"]
 ```
 
@@ -82,13 +102,19 @@ CMD ["python", "app.py"]
 ```bash
 cd 01-strategy-agnostic/03-docker-agnostic/
 
-# Build con tag semantico
-docker build -t gestionale-app:1.0 .
+# Build immagine ottimizzata (stage runtime) usata nei prossimi step
+docker build --target runtime -t gestionale-app:1.0 .
 
-# Confronta dimensioni: single-stage vs multi-stage
-docker images | grep gestionale
+# Tag aggiuntivo per confronto esplicito
+docker tag gestionale-app:1.0 gestionale-app:multi
+
+# Build stage builder (piu pesante) per confronto didattico
+docker build --target builder -t gestionale-app:single .
+
+# Confronta dimensioni: single-stage (builder) vs multi-stage (runtime)
+docker images | grep 'gestionale-app'
 ```
-> 💡 **Output atteso:** L'immagine multi-stage sarà significativamente più piccola rispetto a una build tradizionale.
+> 💡 **Output atteso:** Vedrai almeno `gestionale-app:single` e `gestionale-app:multi` (oltre a `gestionale-app:1.0`). La versione multi-stage sarà significativamente più piccola.
 
 ### Step 3: Testare il container localmente
 
@@ -96,12 +122,12 @@ docker images | grep gestionale
 # Avvia il container
 docker run -d \
   --name gestionale-test \
-  -p 8000:8000 \
+  -p 8080:8080 \
   -e ENVIRONMENT=development \
   gestionale-app:1.0
 
 # Verifica che risponda
-curl http://localhost:8000/health
+curl http://localhost:8080/api/health
 
 # Controlla i log
 docker logs gestionale-test
@@ -201,6 +227,8 @@ aws ecr delete-repository \
 
 # Rimuovi immagini locali
 docker rmi gestionale-app:1.0 2>/dev/null || true
+docker rmi gestionale-app:multi 2>/dev/null || true
+docker rmi gestionale-app:single 2>/dev/null || true
 docker rmi $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/gestionale-app:1.0 2>/dev/null || true
 
 echo "Cleanup completato"
