@@ -32,7 +32,7 @@ Internet
    │
    ▼
 ┌─────────────────────────────────┐
-│     SUBNET PUBBLICA eu-west-1a  │
+│     SUBNET PUBBLICA us-east-1a  │
 │  ┌──────────────┐               │
 │  │ Load Balancer│               │
 │  │ NAT Gateway  │               │
@@ -41,7 +41,7 @@ Internet
    │
    ▼ (solo traffico interno)
 ┌─────────────────────────────────┐
-│    SUBNET PRIVATA eu-west-1a    │
+│    SUBNET PRIVATA us-east-1a    │
 │  ┌──────────────┐               │
 │  │  App Server  │               │
 │  │  (ECS/EC2)   │               │
@@ -50,7 +50,7 @@ Internet
    │
    ▼ (solo porta 5432)
 ┌─────────────────────────────────┐
-│    SUBNET DATABASE eu-west-1a   │
+│    SUBNET DATABASE us-east-1a   │
 │  ┌──────────────┐               │
 │  │  PostgreSQL  │               │
 │  │  (RDS/EC2)   │               │
@@ -70,7 +70,7 @@ Internet
 ```bash
 VPC_ID=$(aws ec2 create-vpc \
   --cidr-block 10.0.0.0/16 \
-  --region eu-west-1 \
+  --region us-east-1 \
   --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=gestionale-vpc},{Key=Project,Value=gestionale}]' \
   --query 'Vpc.VpcId' \
   --output text)
@@ -88,7 +88,7 @@ aws ec2 modify-vpc-attribute \
 SUBNET_PUBLIC=$(aws ec2 create-subnet \
   --vpc-id $VPC_ID \
   --cidr-block 10.0.1.0/24 \
-  --availability-zone eu-west-1a \
+  --availability-zone us-east-1a \
   --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=gestionale-public-1a}]' \
   --query 'Subnet.SubnetId' \
   --output text)
@@ -96,7 +96,7 @@ SUBNET_PUBLIC=$(aws ec2 create-subnet \
 SUBNET_PRIVATE=$(aws ec2 create-subnet \
   --vpc-id $VPC_ID \
   --cidr-block 10.0.2.0/24 \
-  --availability-zone eu-west-1a \
+  --availability-zone us-east-1a \
   --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=gestionale-private-1a}]' \
   --query 'Subnet.SubnetId' \
   --output text)
@@ -153,7 +153,7 @@ aws ec2 authorize-security-group-ingress \
 ```bash
 VPC_ANALYTICS=$(aws ec2 create-vpc \
   --cidr-block 10.1.0.0/16 \
-  --region eu-west-1 \
+  --region us-east-1 \
   --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=analytics-vpc}]' \
   --query 'Vpc.VpcId' \
   --output text)
@@ -161,13 +161,13 @@ VPC_ANALYTICS=$(aws ec2 create-vpc \
 PEER_ID=$(aws ec2 create-vpc-peering-connection \
   --vpc-id $VPC_ID \
   --peer-vpc-id $VPC_ANALYTICS \
-  --region eu-west-1 \
+  --region us-east-1 \
   --query 'VpcPeeringConnection.VpcPeeringConnectionId' \
   --output text)
 
 aws ec2 accept-vpc-peering-connection \
   --vpc-peering-connection-id $PEER_ID \
-  --region eu-west-1
+  --region us-east-1
 
 echo "Peering creato: $PEER_ID"
 ```
