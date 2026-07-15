@@ -133,8 +133,7 @@ aws iam put-role-policy \
 ### Step 3: Applicare la configurazione di replica
 
 ```bash
-ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/s3-replication-role"
-
+ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/s3-replication-role"
 # Aggiorna il file di policy con il Role ARN reale
 sed "s|ROLE_ARN_PLACEHOLDER|$ROLE_ARN|g; s|DEST_BUCKET_PLACEHOLDER|$DEST_BUCKET|g; s|aws/s3|$KMS_KEY_ARN|g" s3-replication-policy.json > /tmp/replication-config.json
 
