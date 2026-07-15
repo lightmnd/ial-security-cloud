@@ -64,6 +64,7 @@ Per il gestionale IAL: **Backup & Restore** è sufficiente (RTO 4h, RPO 1h).
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 SOURCE_BUCKET="gestionale-documenti-$ACCOUNT_ID"
 DEST_BUCKET="gestionale-documenti-backup-$ACCOUNT_ID"
+DEST_REGION=$(aws s3api get-bucket-location --bucket $DEST_BUCKET --query "LocationConstraint" --output text)
 KMS_KEY_ARN="arn:aws:kms:${DEST_REGION}:${ACCOUNT_ID}:alias/aws/s3"
 
 # Bucket sorgente in eu-west-1 (Irlanda)
