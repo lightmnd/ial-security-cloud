@@ -64,6 +64,7 @@ Per il gestionale IAL: **Backup & Restore** è sufficiente (RTO 4h, RPO 1h).
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 SOURCE_BUCKET="gestionale-documenti-$ACCOUNT_ID"
 DEST_BUCKET="gestionale-documenti-backup-$ACCOUNT_ID"
+KMS_KEY_ARN="arn:aws:kms:${DEST_REGION}:${ACCOUNT_ID}:alias/aws/s3"
 
 # Bucket sorgente in eu-west-1 (Irlanda)
 aws s3api create-bucket \
@@ -134,8 +135,7 @@ aws iam put-role-policy \
 ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/s3-replication-role"
 
 # Aggiorna il file di policy con il Role ARN reale
-sed "s|ROLE_ARN_PLACEHOLDER|$ROLE_ARN|g; s|DEST_BUCKET_PLACEHOLDER|$DEST_BUCKET|g" \
-  02-security-compliance/11-disaster-recovery/s3-replication-policy.json > /tmp/replication-config.json
+sed "s|ROLE_ARN_PLACEHOLDER|$ROLE_ARN|g; s|DEST_BUCKET_PLACEHOLDER|$DEST_BUCKET|g; s|aws/s3|$KMS_KEY_ARN|g" s3-replication-policy.json > /tmp/replication-config.json
 
 # Applica la configurazione
 aws s3api put-bucket-replication \
