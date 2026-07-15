@@ -4,6 +4,7 @@
     {
       "ID": "replicate-documenti",
       "Status": "Enabled",
+      "Priority": 1,
       "Filter": {
         "Prefix": "documenti/"
       },
@@ -26,6 +27,7 @@
     {
       "ID": "replicate-backup",
       "Status": "Enabled",
+      "Priority": 2,
       "Filter": {
         "Prefix": "backup/"
       },
