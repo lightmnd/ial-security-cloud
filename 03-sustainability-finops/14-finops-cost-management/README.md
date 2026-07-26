@@ -62,6 +62,8 @@ aws ec2 create-tags --resources i-1234567890abcdef0 --tags \
 ### Prerequisiti
 - AWS CLI configurata con permessi `ce:*`, `budgets:*`
 - Almeno qualche giorno di utilizzo AWS per dati significativi
+- Email valida per ricevere notifiche budget (modifica `budget-alert.json`)
+- Permessi anche su Compute Optimizer (`compute-optimizer:GetEnrollmentStatus`, `compute-optimizer:UpdateEnrollmentStatus`, `compute-optimizer:GetEC2InstanceRecommendations`)
 
 ### Step 1: Esplorare i costi con Cost Explorer
 
@@ -76,11 +78,37 @@ aws ce get-cost-and-usage \
   --query 'ResultsByTime[0].Groups[*].{Servizio:Keys[0],Costo:Metrics.BlendedCost.Amount}' \
   --output table
 
-# Previsione dei costi per il mese corrente
+# Previsione costi da oggi fino a fine mese
+START_DATE=$(python3 - <<'PY'
+from datetime import datetime, UTC
+print(datetime.now(UTC).strftime('%Y-%m-%d'))
+PY
+)
+
+NEXT_MONTH=$(python3 - <<'PY'
+from datetime import datetime, UTC
+now = datetime.now(UTC)
+year = now.year
+month = now.month
+if month == 12:
+    print(f"{year + 1}-01-01")
+else:
+    print(f"{year}-{month + 1:02d}-01")
+PY
+)
+
+echo "START_DATE=$START_DATE"
+echo "NEXT_MONTH=$NEXT_MONTH"
+
+if [ -z "$START_DATE" ] || [ -z "$NEXT_MONTH" ]; then
+  echo "Errore: variabili data non valorizzate. Riesegui i blocchi Python sopra."
+  exit 1
+fi
+
 aws ce get-cost-forecast \
-  --time-period Start=$(date +%Y-%m-01),End=$(date -d 'next month' +%Y-%m-01) \
+  --time-period Start="$START_DATE",End="$NEXT_MONTH" \
   --metric BLENDED_COST \
-  --granularity MONTHLY \
+  --granularity DAILY \
   --region us-east-1
 ```
 
@@ -101,11 +129,13 @@ aws ce get-cost-and-usage \
 ```bash
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-# Crea il budget di $100/mese con alert all'80% e 100% (forecasted)
-# Usa il file budget-alert.json presente nella cartella
+# Prima di creare il budget, modifica budget-alert.json e sostituisci
+# instructor@example.com con la tua email.
+
+# Crea il budget di 100 USD/mese con notifiche da file
 aws budgets create-budget \
   --account-id $ACCOUNT_ID \
-  --budget file://03-sustainability-finops/14-finops-cost-management/budget-alert.json \
+  --budget '{"BudgetName":"gestionale-monthly-budget","BudgetLimit":{"Amount":"100","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}' \
   --notifications-with-subscribers file://03-sustainability-finops/14-finops-cost-management/budget-alert.json \
   --region us-east-1
 
@@ -130,10 +160,16 @@ aws ec2 describe-addresses \
   --output table
 
 # Snapshot EBS non recenti (>90 giorni)
+CUTOFF_DATE=$(python3 - <<'PY'
+from datetime import datetime, timedelta, UTC
+print((datetime.now(UTC) - timedelta(days=90)).strftime('%Y-%m-%d'))
+PY
+)
+
 aws ec2 describe-snapshots \
   --owner-ids self \
   --region eu-west-1 \
-  --query "Snapshots[?StartTime<='$(date -d '90 days ago' +%Y-%m-%d)'].{ID:SnapshotId,Data:StartTime,Dimensione:VolumeSize}" \
+  --query "Snapshots[?StartTime<='${CUTOFF_DATE}'].{ID:SnapshotId,Data:StartTime,Dimensione:VolumeSize}" \
   --output table
 ```
 
@@ -142,15 +178,33 @@ aws ec2 describe-snapshots \
 ```bash
 # Ottieni recommendation per RI (AWS analizza il tuo utilizzo)
 aws ce get-reservation-purchase-recommendation \
-  --service EC2 \
+  --service "Amazon Elastic Compute Cloud - Compute" \
   --region us-east-1 \
   --query 'Recommendations[*].{Istanza:RecommendationDetails[0].InstanceDetails.EC2InstanceDetails.InstanceType,RisparmioAnnuo:EstimatedMonthlySavingsAmount,ROI:EstimatedROI}' \
   --output table
+
+# Variante RDS (se vuoi confrontare anche database)
+# aws ce get-reservation-purchase-recommendation \
+#   --service "Amazon Relational Database Service" \
+#   --region us-east-1 \
+#   --output table
 ```
 
 ### Step 6: AWS Compute Optimizer
 
 ```bash
+# Verifica se Compute Optimizer e' attivo nell'account/regione
+aws compute-optimizer get-enrollment-status \
+  --region eu-west-1 \
+  --output table
+
+# Se lo stato e' Inactive, attiva il servizio (una tantum)
+aws compute-optimizer update-enrollment-status \
+  --status Active \
+  --region eu-west-1
+
+echo "Se hai appena attivato Compute Optimizer, attendi 12-24 ore per vedere raccomandazioni utili."
+
 # Ottieni raccomandazioni di right-sizing per le EC2
 aws compute-optimizer get-ec2-instance-recommendations \
   --region eu-west-1 \

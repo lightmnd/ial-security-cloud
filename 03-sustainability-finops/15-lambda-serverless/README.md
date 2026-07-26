@@ -53,7 +53,7 @@ API Gateway → Lambda  →  REST API handler
 
 ### Prerequisiti
 - AWS CLI configurata con permessi `lambda:*`, `iam:*`
-- Python 3.11 installato localmente
+- Python 3.12 installato localmente
 
 ### Step 1: Esaminare la funzione Lambda esistente
 
@@ -69,32 +69,39 @@ aws iam create-role \
   --role-name gestionale-lambda-role \
   --assume-role-policy-document file://03-sustainability-finops/15-lambda-serverless/trust-policy.json
 
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
 # Permessi base per CloudWatch Logs
 aws iam attach-role-policy \
   --role-name gestionale-lambda-role \
   --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
 # Permessi aggiuntivi per SES e DynamoDB
+cat > lambda-inline-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem"],
+      "Resource": "arn:aws:dynamodb:eu-west-1:${ACCOUNT_ID}:table/gestionale-idempotency"
+    }
+  ]
+}
+EOF
+
 aws iam put-role-policy \
   --role-name gestionale-lambda-role \
   --policy-name gestionale-lambda-permissions \
-  --policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Effect": "Allow",
-        "Action": ["ses:SendEmail", "ses:SendRawEmail"],
-        "Resource": "*"
-      },
-      {
-        "Effect": "Allow",
-        "Action": ["dynamodb:GetItem", "dynamodb:PutItem"],
-        "Resource": "arn:aws:dynamodb:eu-west-1:*:table/gestionale-idempotency"
-      }
-    ]
-  }'
+  --policy-document file://lambda-inline-policy.json
 
 ROLE_ARN=$(aws iam get-role --role-name gestionale-lambda-role --query 'Role.Arn' --output text)
+aws iam wait role-exists --role-name gestionale-lambda-role
 echo "Ruolo creato: $ROLE_ARN"
 ```
 
@@ -108,6 +115,10 @@ aws dynamodb create-table \
   --billing-mode PAY_PER_REQUEST \
   --region eu-west-1
 
+aws dynamodb wait table-exists \
+  --table-name gestionale-idempotency \
+  --region eu-west-1
+
 echo "Tabella DynamoDB creata per idempotenza"
 ```
 
@@ -115,20 +126,24 @@ echo "Tabella DynamoDB creata per idempotenza"
 
 ```bash
 # Crea il pacchetto ZIP
-cd 03-sustainability-finops/15-lambda-serverless/
-zip green_function.zip green_function.py
+zip -j 03-sustainability-finops/15-lambda-serverless/green_function.zip \
+  03-sustainability-finops/15-lambda-serverless/green_function.py
 
 # Deploy della funzione
 aws lambda create-function \
   --function-name gestionale-iscrizioni \
-  --runtime python3.11 \
+  --runtime python3.12 \
   --role $ROLE_ARN \
   --handler green_function.lambda_handler \
-  --zip-file fileb://green_function.zip \
+  --zip-file fileb://03-sustainability-finops/15-lambda-serverless/green_function.zip \
   --timeout 30 \
   --memory-size 256 \
-  --environment "Variables={DYNAMODB_TABLE=gestionale-idempotency,SES_FROM_EMAIL=noreply@gestionale.ial.it,ENVIRONMENT=dev}" \
+  --environment "Variables={DYNAMODB_TABLE=gestionale-idempotency,SES_FROM_EMAIL=noreply@gestionale.ial.it,ENABLE_SES=false,ENVIRONMENT=dev}" \
   --description "Funzione per notifiche iscrizione studenti" \
+  --region eu-west-1
+
+aws lambda wait function-active \
+  --function-name gestionale-iscrizioni \
   --region eu-west-1
 
 echo "Lambda deployata!"
@@ -138,7 +153,7 @@ echo "Lambda deployata!"
 
 ```bash
 # Crea un evento di test
-cat > test-event.json << 'EOF'
+cat > 03-sustainability-finops/15-lambda-serverless/test-event.json << 'EOF'
 {
   "source": "gestionale.iscrizioni",
   "detail-type": "StudenteIscritto",
@@ -155,37 +170,63 @@ EOF
 
 # Invoca la funzione
 aws lambda invoke \
+  --cli-binary-format raw-in-base64-out \
   --function-name gestionale-iscrizioni \
-  --payload file://test-event.json \
+  --payload file://03-sustainability-finops/15-lambda-serverless/test-event.json \
   --region eu-west-1 \
-  response.json
+  03-sustainability-finops/15-lambda-serverless/response.json
 
 # Visualizza la risposta
-cat response.json
-jq '.' response.json
+cat 03-sustainability-finops/15-lambda-serverless/response.json
 
-# Controlla i log CloudWatch
-aws logs tail /aws/lambda/gestionale-iscrizioni --follow --region eu-west-1
+# Controlla i log CloudWatch degli ultimi 5 minuti
+aws logs tail /aws/lambda/gestionale-iscrizioni --since 5m --region eu-west-1
 ```
 
 ### Step 6: Misurare il Cold Start
 
 ```bash
 # Prima invocazione (cold start)
-time aws lambda invoke \
+LOG_RESULT=$(aws lambda invoke \
+  --cli-binary-format raw-in-base64-out \
   --function-name gestionale-iscrizioni \
-  --payload file://test-event.json \
+  --payload file://03-sustainability-finops/15-lambda-serverless/test-event.json \
   --log-type Tail \
   --region eu-west-1 \
-  /dev/null | jq -r '.LogResult' | base64 -d | grep "Init Duration"
+  /dev/null \
+  --query 'LogResult' \
+  --output text)
+
+python3 - "$LOG_RESULT" <<'PY'
+import base64
+import sys
+
+decoded = base64.b64decode(sys.argv[1]).decode("utf-8", errors="ignore")
+for line in decoded.splitlines():
+    if "Init Duration" in line or "Duration" in line:
+        print(line)
+PY
 
 # Seconda invocazione (warm — molto più veloce)
-time aws lambda invoke \
+LOG_RESULT=$(aws lambda invoke \
+  --cli-binary-format raw-in-base64-out \
   --function-name gestionale-iscrizioni \
-  --payload file://test-event.json \
+  --payload file://03-sustainability-finops/15-lambda-serverless/test-event.json \
   --log-type Tail \
   --region eu-west-1 \
-  /dev/null | jq -r '.LogResult' | base64 -d | grep "Duration"
+  /dev/null \
+  --query 'LogResult' \
+  --output text)
+
+python3 - "$LOG_RESULT" <<'PY'
+import base64
+import sys
+
+decoded = base64.b64decode(sys.argv[1]).decode("utf-8", errors="ignore")
+for line in decoded.splitlines():
+    if "Duration" in line:
+        print(line)
+PY
 ```
 
 ### 🧹 Cleanup (Sostenibilità)
@@ -203,12 +244,15 @@ aws iam detach-role-policy --role-name gestionale-lambda-role --policy-arn arn:a
 aws iam delete-role --role-name gestionale-lambda-role
 
 # Rimuovi file temporanei
-rm -f green_function.zip test-event.json response.json
+rm -f 03-sustainability-finops/15-lambda-serverless/green_function.zip
+rm -f 03-sustainability-finops/15-lambda-serverless/test-event.json
+rm -f 03-sustainability-finops/15-lambda-serverless/response.json
+rm -f lambda-inline-policy.json
 ```
 
 ## ✅ Checkpoint
 - [ ] Comprendo il modello serverless e il cold start
-- [ ] Funzione Lambda creata con runtime Python 3.11
+- [ ] Funzione Lambda creata con runtime Python 3.12
 - [ ] Funzione testata con payload di test
 - [ ] Log CloudWatch visualizzati
 - [ ] Idempotency check implementato via DynamoDB

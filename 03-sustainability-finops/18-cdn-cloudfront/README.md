@@ -6,8 +6,8 @@
 
 ## 🎯 Obiettivi della Lezione
 - Comprendere il funzionamento di una CDN e il suo impatto sulla sostenibilità
-- Creare una distribuzione CloudFront con origin S3 e ALB
-- Configurare cache behaviors differenziati per API e asset statici
+- Creare una distribuzione CloudFront con origin S3 protetta da OAC
+- Configurare cache policy efficaci per asset statici
 - Misurare il cache hit ratio e ottimizzare la configurazione
 
 ## 📚 Concetti Chiave
@@ -68,6 +68,10 @@ aws s3api create-bucket \
   --region eu-west-1 \
   --create-bucket-configuration LocationConstraint=eu-west-1
 
+aws s3api put-public-access-block \
+  --bucket $STATIC_BUCKET \
+  --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
 # Carica alcuni file statici di test
 echo "<html><body><h1>Gestionale IAL</h1></body></html>" > index.html
 echo "body { font-family: sans-serif; }" > style.css
@@ -99,29 +103,46 @@ echo "OAC creato: $OAC_ID"
 ### Step 3: Creare la distribuzione CloudFront
 
 ```bash
+cat > 03-sustainability-finops/18-cdn-cloudfront/distribution-config.json <<EOF
+{
+  "CallerReference": "gestionale-$(date +%s)",
+  "Comment": "Distribuzione CDN per gestionale IAL",
+  "Enabled": true,
+  "PriceClass": "PriceClass_100",
+  "HttpVersion": "http2and3",
+  "DefaultRootObject": "index.html",
+  "Origins": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "Id": "S3-${STATIC_BUCKET}",
+        "DomainName": "${STATIC_BUCKET}.s3.eu-west-1.amazonaws.com",
+        "OriginAccessControlId": "${OAC_ID}",
+        "S3OriginConfig": {
+          "OriginAccessIdentity": ""
+        }
+      }
+    ]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "S3-${STATIC_BUCKET}",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": {
+      "Quantity": 2,
+      "Items": ["GET", "HEAD"],
+      "CachedMethods": {
+        "Quantity": 2,
+        "Items": ["GET", "HEAD"]
+      }
+    },
+    "Compress": true,
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  }
+}
+EOF
+
 DISTRIBUTION_ID=$(aws cloudfront create-distribution \
-  --distribution-config "{
-    \"CallerReference\": \"gestionale-$(date +%s)\",
-    \"Comment\": \"Distribuzione CDN per gestionale IAL\",
-    \"DefaultCacheBehavior\": {
-      \"TargetOriginId\": \"S3-$STATIC_BUCKET\",
-      \"ViewerProtocolPolicy\": \"redirect-to-https\",
-      \"CachePolicyId\": \"658327ea-f89d-4fab-a63d-7e88639e58f6\",
-      \"Compress\": true
-    },
-    \"Origins\": {
-      \"Quantity\": 1,
-      \"Items\": [{
-        \"Id\": \"S3-$STATIC_BUCKET\",
-        \"DomainName\": \"$STATIC_BUCKET.s3.eu-west-1.amazonaws.com\",
-        \"OriginAccessControlId\": \"$OAC_ID\",
-        \"S3OriginConfig\": {\"OriginAccessIdentity\": \"\"}
-      }]
-    },
-    \"PriceClass\": \"PriceClass_100\",
-    \"Enabled\": true,
-    \"HttpVersion\": \"http2and3\"
-  }" \
+  --distribution-config file://03-sustainability-finops/18-cdn-cloudfront/distribution-config.json \
   --query 'Distribution.Id' \
   --output text)
 
@@ -137,22 +158,30 @@ DOMAIN=$(aws cloudfront get-distribution \
   --query 'Distribution.DomainName' \
   --output text)
 
-aws s3api put-bucket-policy \
-  --bucket $STATIC_BUCKET \
-  --policy "{
-    \"Version\": \"2012-10-17\",
-    \"Statement\": [{
-      \"Effect\": \"Allow\",
-      \"Principal\": {\"Service\": \"cloudfront.amazonaws.com\"},
-      \"Action\": \"s3:GetObject\",
-      \"Resource\": \"arn:aws:s3:::$STATIC_BUCKET/*\",
-      \"Condition\": {
-        \"StringEquals\": {
-          \"AWS:SourceArn\": \"arn:aws:cloudfront::$ACCOUNT_ID:distribution/$DISTRIBUTION_ID\"
+cat > 03-sustainability-finops/18-cdn-cloudfront/bucket-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudfront.amazonaws.com"
+      },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::${STATIC_BUCKET}/*",
+      "Condition": {
+        "StringEquals": {
+          "AWS:SourceArn": "arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${DISTRIBUTION_ID}"
         }
       }
-    }]
-  }"
+    }
+  ]
+}
+EOF
+
+aws s3api put-bucket-policy \
+  --bucket $STATIC_BUCKET \
+  --policy file://03-sustainability-finops/18-cdn-cloudfront/bucket-policy.json
 
 echo "Distribuzione disponibile su: https://$DOMAIN"
 ```
@@ -168,12 +197,24 @@ curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" https://$DOMAIN/
 curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" https://$DOMAIN/  # Seconda richiesta = da cache
 
 # Controlla il cache hit ratio in CloudWatch
+START_TIME=$(python3 - <<'PY'
+from datetime import datetime, timedelta, timezone
+print((datetime.now(timezone.utc) - timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%SZ'))
+PY
+)
+
+END_TIME=$(python3 - <<'PY'
+from datetime import datetime, timezone
+print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+PY
+)
+
 aws cloudwatch get-metric-statistics \
   --namespace AWS/CloudFront \
   --metric-name CacheHitRate \
   --dimensions Name=DistributionId,Value=$DISTRIBUTION_ID Name=Region,Value=Global \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --start-time $START_TIME \
+  --end-time $END_TIME \
   --period 3600 \
   --statistics Average \
   --region us-east-1
@@ -183,24 +224,47 @@ aws cloudwatch get-metric-statistics \
 
 ```bash
 # Disabilita la distribuzione prima di eliminarla
+ETAG=$(aws cloudfront get-distribution-config --id $DISTRIBUTION_ID --query 'ETag' --output text)
+aws cloudfront get-distribution-config \
+  --id $DISTRIBUTION_ID \
+  --query 'DistributionConfig' > 03-sustainability-finops/18-cdn-cloudfront/distribution-current.json
+
+python3 - <<'PY'
+import json
+
+with open('03-sustainability-finops/18-cdn-cloudfront/distribution-current.json', 'r', encoding='utf-8') as f:
+    data = json.load(f)
+
+data['Enabled'] = False
+
+with open('03-sustainability-finops/18-cdn-cloudfront/distribution-disabled.json', 'w', encoding='utf-8') as f:
+    json.dump(data, f)
+PY
+
 aws cloudfront update-distribution \
   --id $DISTRIBUTION_ID \
-  --if-match $(aws cloudfront get-distribution-config --id $DISTRIBUTION_ID --query 'ETag' --output text) \
-  --distribution-config "$(aws cloudfront get-distribution-config --id $DISTRIBUTION_ID --query 'DistributionConfig' | python3 -c "import json,sys; d=json.load(sys.stdin); d['Enabled']=False; print(json.dumps(d))")"
+  --if-match $ETAG \
+  --distribution-config file://03-sustainability-finops/18-cdn-cloudfront/distribution-disabled.json
 
 # Attendi la disabilitazione, poi elimina
 aws cloudfront wait distribution-deployed --id $DISTRIBUTION_ID
+ETAG_DELETE=$(aws cloudfront get-distribution-config --id $DISTRIBUTION_ID --query 'ETag' --output text)
 aws cloudfront delete-distribution \
   --id $DISTRIBUTION_ID \
-  --if-match $(aws cloudfront get-distribution-config --id $DISTRIBUTION_ID --query 'ETag' --output text)
+  --if-match $ETAG_DELETE
 
 # Elimina l'OAC
-aws cloudfront delete-origin-access-control --id $OAC_ID --if-match $(aws cloudfront get-origin-access-control --id $OAC_ID --query 'ETag' --output text)
+OAC_ETAG=$(aws cloudfront get-origin-access-control --id $OAC_ID --query 'ETag' --output text)
+aws cloudfront delete-origin-access-control --id $OAC_ID --if-match $OAC_ETAG
 
 # Svuota e elimina il bucket
 aws s3 rm s3://$STATIC_BUCKET --recursive
 aws s3api delete-bucket --bucket $STATIC_BUCKET --region eu-west-1
 rm -f index.html style.css
+rm -f 03-sustainability-finops/18-cdn-cloudfront/distribution-config.json
+rm -f 03-sustainability-finops/18-cdn-cloudfront/bucket-policy.json
+rm -f 03-sustainability-finops/18-cdn-cloudfront/distribution-current.json
+rm -f 03-sustainability-finops/18-cdn-cloudfront/distribution-disabled.json
 ```
 
 ## ✅ Checkpoint

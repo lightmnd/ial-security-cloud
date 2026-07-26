@@ -95,16 +95,22 @@ echo "Stack CloudFormation creato!"
 ### Step 3: Verificare l'ASG e le istanze
 
 ```bash
+ASG_NAME=$(aws cloudformation describe-stacks \
+  --stack-name gestionale-asg \
+  --region eu-west-1 \
+  --query 'Stacks[0].Outputs[?OutputKey==`AutoScalingGroupName`].OutputValue' \
+  --output text)
+
 # Vedi lo stato dell'ASG
 aws autoscaling describe-auto-scaling-groups \
-  --auto-scaling-group-names gestionale-asg \
+  --auto-scaling-group-names $ASG_NAME \
   --region eu-west-1 \
   --query 'AutoScalingGroups[0].{Min:MinSize,Max:MaxSize,Desired:DesiredCapacity,Istanze:Instances[*].InstanceId}' \
   --output json
 
 # Vedi il tipo di istanza delle istanze Graviton
 aws ec2 describe-instances \
-  --filters "Name=tag:aws:autoscaling:groupName,Values=gestionale-asg" \
+  --filters "Name=tag:aws:autoscaling:groupName,Values=$ASG_NAME" \
   --region eu-west-1 \
   --query 'Reservations[*].Instances[*].{ID:InstanceId,Tipo:InstanceType,Stato:State.Name,AZ:Placement.AvailabilityZone}' \
   --output table
@@ -113,29 +119,22 @@ aws ec2 describe-instances \
 ### Step 4: Simulare un picco di carico
 
 ```bash
-# Ottieni l'ID di un'istanza nell'ASG
-INSTANCE_ID=$(aws autoscaling describe-auto-scaling-groups \
-  --auto-scaling-group-names gestionale-asg \
-  --region eu-west-1 \
-  --query 'AutoScalingGroups[0].Instances[0].InstanceId' \
-  --output text)
-
 # Imposta manualmente un override al desired capacity (simula carico)
 aws autoscaling set-desired-capacity \
-  --auto-scaling-group-name gestionale-asg \
+  --auto-scaling-group-name $ASG_NAME \
   --desired-capacity 3 \
   --region eu-west-1
 
 # Dopo qualche minuto, verifica il scale-out
 aws autoscaling describe-auto-scaling-groups \
-  --auto-scaling-group-names gestionale-asg \
+  --auto-scaling-group-names $ASG_NAME \
   --region eu-west-1 \
   --query 'AutoScalingGroups[0].Instances[*].{ID:InstanceId,Stato:LifecycleState}' \
   --output table
 
 # Scala di nuovo a 1 (risparmio)
 aws autoscaling set-desired-capacity \
-  --auto-scaling-group-name gestionale-asg \
+  --auto-scaling-group-name $ASG_NAME \
   --desired-capacity 1 \
   --region eu-west-1
 ```

@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Lab 16 - Auto Scaling Group con istanze Graviton"
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC dove creare il Security Group e l'ASG
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Almeno 2 subnet in AZ diverse
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+
+  InstanceType:
+    Type: String
+    Default: t4g.small
+    AllowedValues:
+      - t4g.micro
+      - t4g.small
+      - t4g.medium
+    Description: Tipo istanza Graviton
+
+  MinSize:
+    Type: Number
+    Default: 1
+
+  DesiredCapacity:
+    Type: Number
+    Default: 1
+
+  MaxSize:
+    Type: Number
+    Default: 4
+
+Resources:
+  AsgSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group per lab ASG Graviton
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub gestionale-asg-sg-${Environment}
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub gestionale-lt-${Environment}
+      LaunchTemplateData:
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64}}"
+        InstanceType: !Ref InstanceType
+        SecurityGroupIds:
+          - !Ref AsgSecurityGroup
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -eux
+            dnf -y update
+            dnf -y install httpd
+            systemctl enable --now httpd
+
+            TOKEN=$(curl -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" -s http://169.254.169.254/latest/api/token)
+            INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: ${!TOKEN}" -s http://169.254.169.254/latest/meta-data/instance-id)
+            AZ=$(curl -H "X-aws-ec2-metadata-token: ${!TOKEN}" -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+
+            cat > /var/www/html/index.html <<HTML
+            <html>
+              <body>
+                <h1>Gestionale IAL - ASG Graviton</h1>
+                <p>InstanceId: ${!INSTANCE_ID}</p>
+                <p>AvailabilityZone: ${!AZ}</p>
+                <p>Environment: ${Environment}</p>
+              </body>
+            </html>
+            HTML
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub gestionale-asg-${Environment}
+      MinSize: !Ref MinSize
+      DesiredCapacity: !Ref DesiredCapacity
+      MaxSize: !Ref MaxSize
+      VPCZoneIdentifier: !Ref SubnetIds
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 120
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      Tags:
+        - Key: Name
+          Value: !Sub gestionale-asg-node-${Environment}
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: gestionale
+          PropagateAtLaunch: true
+
+  CpuTargetTrackingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 60
+        DisableScaleIn: false
+
+Outputs:
+  AutoScalingGroupName:
+    Description: Nome dell'Auto Scaling Group
+    Value: !Ref AutoScalingGroup
+
+  LaunchTemplateId:
+    Description: Launch Template creato
+    Value: !Ref LaunchTemplate
+
+  SecurityGroupId:
+    Description: Security Group del lab
+    Value: !Ref AsgSecurityGroup

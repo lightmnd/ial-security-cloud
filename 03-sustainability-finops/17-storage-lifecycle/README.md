@@ -161,22 +161,40 @@ echo "Emissioni ridotte proporzionalmente grazie a hardware più efficiente"
 ### 🧹 Cleanup (Sostenibilità)
 
 ```bash
-# Rimuovi tutti gli oggetti e le versioni
+# Rimuovi oggetti versionati e delete markers
+aws s3api list-object-versions --bucket $BUCKET > versions.json
+
+python3 - <<'PY'
+import json
+
+with open("versions.json", "r", encoding="utf-8") as f:
+  data = json.load(f)
+
+objects = [
+  {"Key": item["Key"], "VersionId": item["VersionId"]}
+  for item in data.get("Versions", [])
+]
+objects.extend(
+  {"Key": item["Key"], "VersionId": item["VersionId"]}
+  for item in data.get("DeleteMarkers", [])
+)
+
+with open("delete-versions.json", "w", encoding="utf-8") as f:
+  json.dump({"Objects": objects, "Quiet": True}, f)
+
+print(f"Versioni/delete markers da eliminare: {len(objects)}")
+PY
+
 aws s3api delete-objects \
   --bucket $BUCKET \
-  --delete "$(aws s3api list-object-versions \
-    --bucket $BUCKET \
-    --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
-    --output json)"
-
-# Elimina i delete markers
-aws s3 rm s3://$BUCKET --recursive
+  --delete file://delete-versions.json
 
 # Elimina il bucket
 aws s3api delete-bucket --bucket $BUCKET --region eu-west-1
 
 # Rimuovi file locali di test
 rm -f doc-studente-*.txt
+rm -f versions.json delete-versions.json
 ```
 
 ## ✅ Checkpoint

@@ -67,7 +67,7 @@ Il sesto pilastro (aggiunto nel novembre 2021) definisce best practice per minim
 - CDN per ridurre i trasferimenti dati
 - Compressione, caching, ottimizzazione delle immagini
 
-## ��️ Hands-on: Carbon Footprint e Ottimizzazioni
+## 🛠️ Hands-on: Carbon Footprint e Ottimizzazioni
 
 ### Prerequisiti
 - Account AWS con accesso alla console
@@ -120,13 +120,37 @@ echo "Risparmio scegliendo la regione giusta: 44 kg CO2/mese"
 ### Step 4: Identificare risorse idle nel proprio account
 
 ```bash
-# Trova EC2 con CPU < 5% nelle ultime 2 settimane (potenzialmente sovradimensionate)
+# Trova una EC2 in esecuzione (se presente)
+INSTANCE_ID=$(aws ec2 describe-instances \
+  --filters Name=instance-state-name,Values=running \
+  --region eu-west-1 \
+  --query 'Reservations[0].Instances[0].InstanceId' \
+  --output text)
+
+if [ "$INSTANCE_ID" = "None" ]; then
+  echo "Nessuna EC2 in running in eu-west-1. Salta questo step o avvia una istanza di test."
+  exit 0
+fi
+
+START_TIME=$(python3 - <<'PY'
+from datetime import datetime, timedelta, timezone
+print((datetime.now(timezone.utc) - timedelta(days=14)).strftime('%Y-%m-%dT%H:%M:%SZ'))
+PY
+)
+
+END_TIME=$(python3 - <<'PY'
+from datetime import datetime, timezone
+print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+PY
+)
+
+# Verifica CPU media giornaliera nelle ultime 2 settimane
 aws cloudwatch get-metric-statistics \
   --namespace AWS/EC2 \
   --metric-name CPUUtilization \
-  --dimensions Name=InstanceId,Value=i-1234567890abcdef0 \
-  --start-time $(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --dimensions Name=InstanceId,Value=$INSTANCE_ID \
+  --start-time $START_TIME \
+  --end-time $END_TIME \
   --period 86400 \
   --statistics Average \
   --region eu-west-1 \
