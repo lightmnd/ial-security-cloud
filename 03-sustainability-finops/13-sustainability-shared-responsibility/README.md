@@ -78,11 +78,12 @@ Il sesto pilastro (aggiunto nel novembre 2021) definisce best practice per minim
 ```bash
 # Via AWS CLI (richiede permessi billing:*)
 aws ce get-cost-and-usage \
-  --time-period Start=2025-01-01,End=2025-07-01 \
+  --time-period Start=2025-08-01,End=2026-02-01 \
   --granularity MONTHLY \
-  --metrics "UsageQuantity" \
+  --metrics "UsageQuantity" "UnblendedCost" \
   --group-by Type=DIMENSION,Key=SERVICE \
   --region us-east-1
+
 
 # Il Carbon Footprint Tool è accessibile dalla console:
 # AWS Console → Billing → Carbon Footprint Tool
@@ -93,13 +94,11 @@ aws ce get-cost-and-usage \
 
 ```bash
 # Ottieni il carbon footprint per regione (API)
-aws ce get-cost-and-usage \
-  --time-period Start=2025-04-01,End=2025-07-01 \
-  --granularity MONTHLY \
-  --metrics "BlendedCost" \
-  --group-by Type=DIMENSION,Key=REGION \
+aws sustainability get-estimated-carbon-emissions \
+  --time-period '{"Start": "2025-01-01T00:00:00Z", "End": "2025-06-01T00:00:00Z"}' \
+  --group-by "REGION" "SERVICE" \
   --region us-east-1 \
-  --query 'ResultsByTime[*].Groups[*].{Regione:Keys[0],Costo:Metrics.BlendedCost.Amount}' \
+  --query 'Results[*].{Mese: TimePeriod.Start, Servizio: DimensionsValues.SERVICE, Regione: DimensionsValues.REGION, CO2_LBM: EmissionsValues.TOTAL_LBM_CARBON_EMISSIONS.Value}' \
   --output table
 ```
 
@@ -121,9 +120,9 @@ echo "Risparmio scegliendo la regione giusta: 44 kg CO2/mese"
 
 ```bash
 # Trova una EC2 in esecuzione (se presente)
-INSTANCE_ID=$(aws ec2 describe-instances \
-  --filters Name=instance-state-name,Values=running \
-  --region eu-west-1 \
+  INSTANCE_ID=$(aws ec2 describe-instances \
+  --filters "Name=instance-state-name,Values=running,stopped" \
+  --region us-east-1 \
   --query 'Reservations[0].Instances[0].InstanceId' \
   --output text)
 
