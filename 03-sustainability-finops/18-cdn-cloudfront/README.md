@@ -55,7 +55,7 @@ CloudFront riduce il consumo energetico:
 
 ### Prerequisiti
 - AWS CLI configurata con permessi `cloudfront:*`, `s3:*`
-- Vedi il file `cloudfront-dist.txt` per la guida completa CLI
+- Vedi il file `cloudfront-dist.md` per la guida completa CLI
 
 ### Step 1: Creare il bucket S3 per gli asset statici
 
