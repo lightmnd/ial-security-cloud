@@ -1,95 +1,124 @@
-# 📘 Lezione 19 – Terraform IaC
+# 📘 Lezione 19a - Terraform Core (Hands-on 30 minuti)
 
-**📅 Data:** Lunedì 03/08/2025  
-**🗂️ Modulo:** Modulo 4 – IaC & Osservabilità  
-**⏱️ Durata:** 1 ora
+**Modulo:** 04 - IaC & Osservabilita  
+**Durata massima:** 30 minuti  
+**Livello:** Base/Intermedio
 
-## 🎯 Obiettivi della Lezione
-- Comprendere Infrastructure as Code con Terraform
-- Gestire providers, state e modules
-- Eseguire plan/apply/destroy in modo sicuro
+## 🎯 Obiettivi del laboratorio
+- Capire il ciclo Terraform: `init`, `plan`, `apply`, `destroy`
+- Usare variabili e output per rendere il codice riusabile
+- Creare risorse AWS minime ma realistiche e sicure
+- Verificare rapidamente il risultato con AWS CLI
 
-## 📚 Concetti Chiave
+## 🧱 Cosa viene creato
+- 1 bucket S3 con:
+  - versioning abilitato
+  - cifratura server-side (SSE-S3)
+  - blocco accessi pubblici
+- 1 log group CloudWatch con retention configurabile
 
-### Terraform: IaC Dichiarativo
-Terraform descrive l'infrastruttura desiderata in file HCL. Il motore Terraform calcola la differenza tra stato attuale e desiderato e applica solo le modifiche necessarie.
+## ⏱️ Agenda consigliata (30 minuti)
+1. 0-5 min: prerequisiti e setup
+2. 5-10 min: `terraform init` + `validate`
+3. 10-15 min: `terraform plan`
+4. 15-20 min: `terraform apply` + output
+5. 20-25 min: verifica da AWS CLI
+6. 25-30 min: mini modifica + `destroy`
 
-**Workflow:**
-1. `terraform init` — scarica i providers
-2. `terraform plan` — mostra le modifiche senza applicarle
-3. `terraform apply` — applica le modifiche
-4. `terraform destroy` — distrugge l'infrastruttura
+## ✅ Prerequisiti
+- Terraform >= 1.6 (`terraform version`)
+- AWS CLI configurata (`aws sts get-caller-identity`)
+- Permessi IAM per S3, CloudWatch Logs e lettura account
 
-**State**: Terraform salva lo stato dell'infrastruttura in `terraform.tfstate`. In team, usa un backend remoto (S3 + DynamoDB lock) per condividere lo state in modo sicuro.
+## 📂 File del laboratorio
+- `providers.tf`: provider AWS e tag di default
+- `variables.tf`: input parametrizzabili
+- `main.tf`: risorse, data source e output
 
-### Struttura dei File
-- `providers.tf` — configurazione provider e backend
-- `variables.tf` — variabili di input
-- `main.tf` — risorse principali
-- `outputs.tf` — valori di output
+## 🚀 Esecuzione step-by-step
 
-## 🛠️ Hands-on: Deploy del Gestionale con Terraform
-
-### Prerequisiti
-- Terraform >= 1.5 installato (`terraform version`)
-- AWS CLI configurata
-
-### Step 1: Esaminare i file Terraform
-
-```bash
-cat 04-iac-observability/19-terraform-core/providers.tf
-cat 04-iac-observability/19-terraform-core/variables.tf
-cat 04-iac-observability/19-terraform-core/main.tf
-```
-
-### Step 2: Inizializzare Terraform
+### 1) Vai nella cartella e inizializza
 
 ```bash
-cd 04-iac-observability/19-terraform-core/
-
-# Inizializza (scarica provider AWS)
+cd 04-iac-observability/19a-terraform-core
 terraform init
-
-# Valida la sintassi
 terraform validate
 ```
 
-### Step 3: Pianificare e applicare
+### 2) Esegui il piano
 
 ```bash
-# Piano con variabili custom
 terraform plan \
-  -var="environment=dev" \
   -var="project_name=gestionale" \
-  -out=gestionale.tfplan
-
-# Rivedi il piano, poi applica
-terraform apply gestionale.tfplan
+  -var="environment=lab" \
+  -var="owner=roberto" \
+  -out=tfplan
 ```
 
-### Step 4: Verificare le risorse create
+Controlla nel piano che siano previste risorse S3 e CloudWatch.
+
+### 3) Applica il piano
 
 ```bash
-# Visualizza gli output
+terraform apply tfplan
+```
+
+### 4) Leggi gli output
+
+```bash
 terraform output
-
-# Lista risorse nello state
-terraform state list
 ```
 
-### 🧹 Cleanup (Sostenibilità)
+Output attesi:
+- `aws_account_id`
+- `aws_region`
+- `s3_bucket_name`
+- `cloudwatch_log_group_name`
+
+### 5) Verifica veloce con AWS CLI
 
 ```bash
-terraform destroy -var="environment=dev" -auto-approve
+BUCKET=$(terraform output -raw s3_bucket_name)
+LOG_GROUP=$(terraform output -raw cloudwatch_log_group_name)
+
+aws s3api get-bucket-versioning --bucket "$BUCKET"
+aws s3api get-bucket-encryption --bucket "$BUCKET"
+aws s3api get-public-access-block --bucket "$BUCKET"
+aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP" --max-items 1
 ```
 
-## ✅ Checkpoint
-- [ ] Terraform init eseguito con successo
-- [ ] terraform plan mostra le risorse da creare
-- [ ] terraform apply completato
-- [ ] terraform destroy eseguito
+## 🔁 Mini esercizio (3-5 minuti)
+Aggiorna la retention log a 14 giorni senza toccare il codice:
 
-## 📖 Approfondimenti
-- [Terraform Documentation](https://developer.hashicorp.com/terraform/docs)
-- [Terraform Registry](https://registry.terraform.io/)
-- [AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+```bash
+terraform plan -var="log_retention_days=14"
+terraform apply -auto-approve -var="log_retention_days=14"
+```
+
+Osserva nel piano che Terraform propone un update in-place del log group.
+
+## 🧹 Cleanup obbligatorio (evita costi)
+
+```bash
+terraform destroy \
+  -var="project_name=gestionale" \
+  -var="environment=lab" \
+  -var="owner=roberto" \
+  -auto-approve
+```
+
+## 🛟 Troubleshooting rapido
+- Errore credenziali AWS: riesegui `aws configure` o esporta il profilo corretto.
+- Errore nome bucket: il bucket e globale; cambia `bucket_prefix` nel comando `plan/apply`.
+- Errore regione: imposta `-var="aws_region=<regione>"`.
+
+## 📌 Checkpoint finale
+- [ ] `terraform init` e `terraform validate` OK
+- [ ] `terraform plan` comprensibile e senza errori
+- [ ] `terraform apply` completato
+- [ ] verifiche AWS CLI positive
+- [ ] `terraform destroy` eseguito
+
+## 📖 Risorse utili
+- Terraform docs: https://developer.hashicorp.com/terraform/docs
+- AWS provider: https://registry.terraform.io/providers/hashicorp/aws/latest/docs
