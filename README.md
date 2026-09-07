@@ -19,6 +19,7 @@ Benvenuti nel corso pratico dedicato alla progettazione di sistemi cloud moderni
 | **10** | 19-20 | IaC & Osservabilità | Terraform, Grafana |
 | **11** | 21-22 | Automation & Cases | Step Functions, Migrazione |
 | **12** | 23-24 | Final Lab & Test | Assemblaggio & Valutazione |
+| **13** | 25-29 | AI, ML, LLMs & AI Security | ML basics, RAG, AI Security Governance |
 
 ## 🚀 Inizializzazione Ambiente
 Per configurare i tool necessari (AWS CLI, Terraform, Docker, kubectl), esegui:
