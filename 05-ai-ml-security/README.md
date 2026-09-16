@@ -1,47 +1,81 @@
-# Modulo 5 - AI, ML, LLMs e AI Security
+# Modulo 05 - AI e AI Security
 
-**Durata complessiva:** 5 ore (5 lezioni da 1 ora)  
-**Tema:** dall'introduzione all'AI ai principi di sicurezza applicata ai sistemi AI e LLM.
+## Durata
+- 2 lezioni da 2 ore
+- totale: 4 ore
 
 ## Obiettivo del modulo
-Questo modulo completa il percorso cloud-security del corso con una prospettiva moderna: le tecnologie AI e ML non sono solo funzionalità applicative, ma diventano componenti critici del sistema cloud, con implicazioni su sicurezza, governance, dati e operazioni.
+Questo modulo introduce gli studenti a due dimensioni centrali della sicurezza moderna:
 
-## Struttura delle lezioni
-1. [25-ai-foundations](25-ai-foundations/README.md) - AI Foundations & Machine Learning Basics
-2. [26-deep-learning-llms-rag](26-deep-learning-llms-rag/README.md) - Deep Learning, LLMs e RAG
-3. [27-ai-security-model-protection](27-ai-security-model-protection/README.md) - AI Security: Protezione dei Modelli
-4. [28-ai-security-data-privacy](28-ai-security-data-privacy/README.md) - AI Security: Dati Sensibili e Privacy
-5. [29-ai-security-governance](29-ai-security-governance/README.md) - AI Security: Governance, Secure Deployment e Best Practices
+1. l'AI e il machine learning come strumenti per l'analisi, la correlazione e il supporto alle decisioni;
+2. la sicurezza dei sistemi AI, con attenzione a dati, modelli, prompt, governance e applicazioni nel campo DFIR.
 
-## Materiale integrativo
-- [30-ai-mini-lab-aws](30-ai-mini-lab-aws/README.md) - Mini-lab AWS: Secure AI Document Review
-- [31-ai-student-evaluation](31-ai-student-evaluation/README.md) - Valutazione finale del modulo
+Il percorso è progettato per studenti con background in cloud, sicurezza, infrastrutture e analisi dei rischi. L'AI viene sempre collegata a:
+- IAM e least privilege;
+- gestione dei dati sensibili;
+- logging, audit e monitoraggio;
+- asset isolation e rete;
+- governance e responsabilità professionale.
 
-## Mappa concettuale
-- AI Foundations: definizioni, pipeline e casi d'uso
-- ML: addestramento, valutazione e monitoraggio
-- Deep Learning: reti neurali e transformer
-- LLM e RAG: applicazioni reali e opportunità
-- AI Security: attacchi, dati sensibili, governance e deployment sicuro
+---
 
-## Attenzione didattica
-Il percorso è costruito per studenti con background cloud/security. Per questo motivo la parte AI viene sempre collegata a:
-- IAM e least privilege
-- encrypt/decrypt dei dati
-- logging e audit
-- network segmentation
-- governance e access control
+## Struttura del modulo
 
-## Hands-on previsto nel modulo
-- esempio di semplice regressione ML
-- esempio di embedding e RAG
-- validazione di prompt
-- classificazione di dati sensibili
-- checklist di sicurezza per deployment AI
+### Lezione 1 - AI, ML, LLM e AI nel DFIR (2 ore)
+Focus:
+- AI, ML, Deep Learning e LLM
+- ciclo di vita del modello
+- dati, provenance, overfitting e validation
+- pre-trained models, fine-tuning e model card
+- applicazioni dell'AI in Digital Forensics e Incident Response
+- etica, bias, trasparenza e responsabilità
 
-## Checkpoint finale del modulo
-- [ ] Distinguo AI, ML, DL e LLM
-- [ ] Capisco il ruolo di RAG in applicazioni reali
-- [ ] Riconosco il rischio AI Security
-- [ ] So come proteggere dati e modelli
-- [ ] Posso definire una policy di governance e deployment sicuro
+Materiale:
+- [01-ai-fondamenti-dfir/README.md](01-ai-fondamenti-dfir/README.md)
+
+### Lezione 2 - AI Security: minacce, difese e governance (2 ore)
+Focus:
+- prompt injection e system prompt hijacking
+- data poisoning, model theft, privacy leakage, model drift
+- AI-enhanced phishing, deepfake e malware generativo
+- AI in sicurezza operativa e DFIR
+- best practice e governance per modelli e deployment
+- RBAC, MFA, monitoraggio, AI RMF, ISO/IEC 27090
+
+Materiale:
+- [02-ai-security-threats-governance/README.md](02-ai-security-threats-governance/README.md)
+
+---
+
+## Esercizi pratici previsti
+- classificazione di dati e log con supporto AI/ML;
+- analisi di prompt e valutazione di possibili override di regole di sicurezza;
+- confronto tra comportamenti deterministici e non deterministici;
+- esperimenti su prompt injection e prompt engineering;
+- esercitazione di triage di email phishing potenzialmente AI-enhanced;
+- analisi di un caso DFIR con timeline e correlazione di eventi.
+
+---
+
+## Strumenti e ambienti consigliati
+- Python 3.x
+- Jupyter Notebook o VS Code
+- librerie: scikit-learn, pandas, matplotlib
+- ambiente browser per prompt testing (se previsto dal corso)
+- strumenti per log e timeline (es. Elasticsearch, SIEM o strumenti open source)
+
+---
+
+## Test finale del modulo
+Il test di verifica unificato è disponibile qui:
+- [test-ai-security.md](test-ai-security.md)
+
+---
+
+## Risultati attesi
+Al termine del modulo gli studenti saranno in grado di:
+- distinguere AI, ML, deep learning e LLM;
+- comprendere il ciclo di vita di un modello e il ruolo dei dati;
+- riconoscere le principali minacce ai sistemi AI;
+- spiegare il ruolo dell'AI in DFIR, SOC e security operations;
+- applicare principi di governance, sicurezza, privacy e responsabilità professionale in scenari reali.
