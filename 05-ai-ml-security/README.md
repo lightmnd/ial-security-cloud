@@ -69,6 +69,26 @@ Materiale:
 ## Test finale del modulo
 Il test di verifica unificato è disponibile qui:
 - [test-ai-security.md](test-ai-security.md)
+- [test-ai-security-quick.md](test-ai-security-quick.md)
+
+## Mini laboratorio finale
+Per chiudere il modulo in modo pratico e visivo, gli studenti possono usare il mini laboratorio finale con Gemini Free:
+- [mini-lab-gemini-final-test.md](mini-lab-gemini-final-test.md)
+
+Questo laboratorio chiede loro di copiare e incollare il testo del test, chiedere a Gemini di generare un PDF esportabile e stilizzato e creare flashcards sugli argomenti hot.
+
+## Flashcards per ripasso
+Per il ripasso rapido dei temi più importanti del modulo, usare anche:
+- [flashcards-ai-security.md](flashcards-ai-security.md)
+- [flashcards-ai-security-by-topic.md](flashcards-ai-security-by-topic.md)
+- [flashcards-ai-security-printable.md](flashcards-ai-security-printable.md)
+
+## Prompt pronti per aula
+Per una variante più pratica del mini laboratorio, usare anche il materiale di prompt e pratiche didattiche:
+- [mini-lab-gemini-final-test.md](mini-lab-gemini-final-test.md)
+- [prompt-varianti-aula.md](prompt-varianti-aula.md)
+
+Questo include esempi di zero-shot, one-shot, few-shot, chain-of-thought, template e prompt per la generazione di PDF e flashcards.
 
 ---
 
