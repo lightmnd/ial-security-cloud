@@ -70,6 +70,7 @@ Materiale:
 Il test di verifica unificato è disponibile qui:
 - [test-ai-security.md](test-ai-security.md)
 - [test-ai-security-quick.md](test-ai-security-quick.md)
+- [test-ai-security-final-multiple-choice.md](test-ai-security-final-multiple-choice.md)
 
 ## Mini laboratorio finale
 Per chiudere il modulo in modo pratico e visivo, gli studenti possono usare il mini laboratorio finale con Gemini Free:
